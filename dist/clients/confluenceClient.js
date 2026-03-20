@@ -74,6 +74,16 @@ class ConfluenceClient {
         });
         return parseJsonResponse(response, 'get page');
     }
+    async findPageByTitleInSpace(title, spaceId) {
+        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages?space-id=${spaceId}&title=${title}&body-format=storage&limit=1`, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+        const parsedResponse = await parseJsonResponse(response, 'find page by title');
+        return parsedResponse.results[0];
+    }
     async updatePage(payload) {
         const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages/${payload.id}`, {
             method: 'PUT',

@@ -22,6 +22,13 @@ export interface ValidatedDocumentationWebhookPayload {
   timestamp: string;
 }
 
+export interface DocumentationPageRoute {
+  pageTitle: string;
+  pageType: 'feature-page';
+  featureKey: string;
+  normalizedFeature: string;
+}
+
 export interface ForgeWebTriggerRequest {
   method?: string;
   headers?: Record<string, string[] | string | undefined>;
@@ -59,4 +66,6 @@ export interface DocumentationSyncResult {
   source: SupportedSource;
   timestamp: string;
   message: string;
+  route: DocumentationPageRoute;
+  usedFallbackPage: boolean;
 }

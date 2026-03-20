@@ -7,6 +7,27 @@ class ConfluencePageService {
     constructor(confluenceClient) {
         this.confluenceClient = confluenceClient;
     }
+    async resolvePageTarget(fallbackPageId, routedPageTitle) {
+        const fallbackPage = await this.confluenceClient.getPage(fallbackPageId);
+        const routedPage = await this.confluenceClient.findPageByTitleInSpace(routedPageTitle, fallbackPage.spaceId);
+        /**
+         * We deliberately keep fallback behavior stable in this first routing pass.
+         *
+         * If a feature-specific title has not been created in Confluence yet, we continue writing to the existing known
+         * page instead of creating new pages automatically. That keeps the sync pipeline predictable while page routing is
+         * still being introduced.
+         */
+        if (!routedPage) {
+            return {
+                page: fallbackPage,
+                usedFallbackPage: true,
+            };
+        }
+        return {
+            page: routedPage,
+            usedFallbackPage: false,
+        };
+    }
     async appendStorageEntry(pageId, expectedSpaceId, entry) {
         const currentPage = await this.confluenceClient.getPage(pageId);
         if (expectedSpaceId && currentPage.spaceId !== expectedSpaceId) {

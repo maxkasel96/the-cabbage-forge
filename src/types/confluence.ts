@@ -32,3 +32,7 @@ export interface ConfluencePageUpdateResponse {
   spaceId: string;
   version: ConfluencePageVersion;
 }
+
+export interface ConfluencePageListResponse {
+  results: ConfluencePageReadModel[];
+}

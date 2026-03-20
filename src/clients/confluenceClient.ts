@@ -2,6 +2,7 @@ import api, { route } from '@forge/api';
 
 import { AppError } from '../errors/appError';
 import type {
+  ConfluencePageListResponse,
   ConfluencePageReadModel,
   ConfluencePageUpdateRequest,
   ConfluencePageUpdateResponse,
@@ -57,6 +58,22 @@ export class ConfluenceClient {
     );
 
     return parseJsonResponse<ConfluencePageReadModel>(response, 'get page');
+  }
+
+  async findPageByTitleInSpace(title: string, spaceId: string): Promise<ConfluencePageReadModel | undefined> {
+    const response = await api.asApp().requestConfluence(
+      route`/wiki/api/v2/pages?space-id=${spaceId}&title=${title}&body-format=storage&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    const parsedResponse = await parseJsonResponse<ConfluencePageListResponse>(response, 'find page by title');
+
+    return parsedResponse.results[0];
   }
 
   async updatePage(payload: ConfluencePageUpdateRequest): Promise<ConfluencePageUpdateResponse> {

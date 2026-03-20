@@ -31,7 +31,7 @@ export async function documentationWebhookHandler(
 
     // TODO: Persist and check an idempotency key so retried webhook deliveries do not create duplicate page entries.
     // TODO: Route multiple event types to specialized builders once the webhook contract expands beyond feature updates.
-    // TODO: Support multiple Confluence page destinations based on payload routing rules when more docs surfaces are introduced.
+    // Page routing now lives in a dedicated helper so the handler stays focused on request parsing and payload validation.
     const syncResult = await documentationSyncService.syncDocumentation(validatedPayload);
 
     return createSuccessResponse(200, syncResult);
