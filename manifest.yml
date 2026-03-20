@@ -17,7 +17,7 @@ modules:
 
   function:
     - key: docs-sync-handler
-      handler: index.handleDocsSync
+      handler: dist/index.handleDocsSync
 
 resources:
   - key: bgScriptResource
