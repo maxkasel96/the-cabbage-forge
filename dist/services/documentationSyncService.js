@@ -12,21 +12,29 @@ class DocumentationSyncService {
     }
     async syncDocumentation(payload) {
         /**
-         * The orchestration layer deliberately stays small: derive the page route, build the Confluence-safe storage block,
-         * append it to the resolved page, and then return a stable response contract for the caller. This gives us a clean
-         * place to add richer workflows later without bloating the HTTP handler.
+         * The orchestration layer deliberately stays small: derive the page route, build the Confluence-safe storage body,
+         * refresh the structured sections with the newest payload, preserve prior history entries, and then return a stable
+         * response contract for the caller. This gives us a clean place to add richer workflows later without bloating the
+         * HTTP handler.
          */
         const route = (0, documentationPageRouter_1.routeDocumentationPage)(payload);
         const resolvedTarget = await this.confluencePageService.resolvePageTarget(constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageTitle);
-        const entry = (0, confluenceEntryBuilder_1.buildConfluenceDocumentationEntry)(payload);
-        const appendResult = await this.confluencePageService.appendStorageEntry(resolvedTarget.page.id, resolvedTarget.page.spaceId, entry);
+        const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
+        const mergeResult = (0, confluenceEntryBuilder_1.mergeExistingContentWithNewUpdate)(existingContent, payload);
+        const renderedPage = (0, confluenceEntryBuilder_1.renderFeaturePage)(payload, mergeResult.historyEntries);
+        const updateResult = await this.confluencePageService.updatePageBody(resolvedTarget.page.id, resolvedTarget.page.spaceId, renderedPage, {
+            pageInitialized: mergeResult.pageInitialized,
+            structuredContentUpdated: mergeResult.structuredContentUpdated,
+            historyEntryCount: mergeResult.historyEntries.length,
+            usedLegacyMigrationEntry: mergeResult.usedLegacyMigrationEntry,
+        });
         return {
-            pageId: appendResult.updatedPage.id,
-            title: appendResult.updatedPage.title,
-            spaceId: appendResult.updatedPage.spaceId,
+            pageId: updateResult.updatedPage.id,
+            title: updateResult.updatedPage.title,
+            spaceId: updateResult.updatedPage.spaceId,
             spaceKey: constants_1.CONFLUENCE_TARGET_SPACE_KEY,
-            previousVersion: appendResult.previousPage.version.number,
-            updatedVersion: appendResult.updatedPage.version.number,
+            previousVersion: updateResult.previousPage.version.number,
+            updatedVersion: updateResult.updatedPage.version.number,
             eventType: payload.eventType,
             source: payload.source,
             timestamp: payload.timestamp,

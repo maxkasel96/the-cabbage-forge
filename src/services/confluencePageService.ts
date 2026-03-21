@@ -6,9 +6,13 @@ import type {
   ConfluencePageUpdateResponse,
 } from '../types/confluence';
 
-export interface AppendPageEntryResult {
+export interface UpdateStructuredPageResult {
   previousPage: ConfluencePageReadModel;
   updatedPage: ConfluencePageUpdateResponse;
+  pageInitialized: boolean;
+  structuredContentUpdated: boolean;
+  historyEntryCount: number;
+  usedLegacyMigrationEntry: boolean;
 }
 
 export interface ResolvedConfluencePageTarget {
@@ -104,7 +108,17 @@ export class ConfluencePageService {
     };
   }
 
-  async appendStorageEntry(pageId: string, expectedSpaceId: string | undefined, entry: string): Promise<AppendPageEntryResult> {
+  async updatePageBody(
+    pageId: string,
+    expectedSpaceId: string | undefined,
+    updatedBody: string,
+    options: {
+      pageInitialized: boolean;
+      structuredContentUpdated: boolean;
+      historyEntryCount: number;
+      usedLegacyMigrationEntry: boolean;
+    }
+  ): Promise<UpdateStructuredPageResult> {
     const currentPage = await this.confluenceClient.getPage(pageId);
 
     if (expectedSpaceId && currentPage.spaceId !== expectedSpaceId) {
@@ -113,17 +127,6 @@ export class ConfluencePageService {
         receivedSpaceId: currentPage.spaceId,
       });
     }
-
-    /**
-     * Appending to the current storage body keeps this first version pragmatic.
-     *
-     * The page service is the right place for body merge rules because future refinements—such as inserting entries
-     * into a specific section, deduplicating repeated payloads, or preserving anchor locations—are page concerns rather
-     * than HTTP or validation concerns.
-     */
-    const existingBody = currentPage.body?.storage?.value ?? '';
-    const updatedBody = `${existingBody}
-${entry}`.trim();
 
     const updateRequest: ConfluencePageUpdateRequest = {
       id: currentPage.id,
@@ -142,9 +145,22 @@ ${entry}`.trim();
     // TODO: Add retry-safe version conflict handling if concurrent sync requests begin colliding on page version numbers.
     const updatedPage = await this.confluenceClient.updatePage(updateRequest);
 
+    console.info('[DocumentationSync] Structured Confluence page update applied', {
+      pageId: currentPage.id,
+      title: currentPage.title,
+      pageInitialized: options.pageInitialized,
+      structuredContentUpdated: options.structuredContentUpdated,
+      historyEntryCount: options.historyEntryCount,
+      usedLegacyMigrationEntry: options.usedLegacyMigrationEntry,
+    });
+
     return {
       previousPage: currentPage,
       updatedPage,
+      pageInitialized: options.pageInitialized,
+      structuredContentUpdated: options.structuredContentUpdated,
+      historyEntryCount: options.historyEntryCount,
+      usedLegacyMigrationEntry: options.usedLegacyMigrationEntry,
     };
   }
 }

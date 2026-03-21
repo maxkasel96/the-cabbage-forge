@@ -71,7 +71,7 @@ class ConfluencePageService {
             createdPage: true,
         };
     }
-    async appendStorageEntry(pageId, expectedSpaceId, entry) {
+    async updatePageBody(pageId, expectedSpaceId, updatedBody, options) {
         const currentPage = await this.confluenceClient.getPage(pageId);
         if (expectedSpaceId && currentPage.spaceId !== expectedSpaceId) {
             throw new appError_1.AppError('BAD_REQUEST', 'Configured Confluence page does not belong to the expected space.', 400, {
@@ -79,16 +79,6 @@ class ConfluencePageService {
                 receivedSpaceId: currentPage.spaceId,
             });
         }
-        /**
-         * Appending to the current storage body keeps this first version pragmatic.
-         *
-         * The page service is the right place for body merge rules because future refinements—such as inserting entries
-         * into a specific section, deduplicating repeated payloads, or preserving anchor locations—are page concerns rather
-         * than HTTP or validation concerns.
-         */
-        const existingBody = currentPage.body?.storage?.value ?? '';
-        const updatedBody = `${existingBody}
-${entry}`.trim();
         const updateRequest = {
             id: currentPage.id,
             status: 'current',
@@ -104,9 +94,21 @@ ${entry}`.trim();
         };
         // TODO: Add retry-safe version conflict handling if concurrent sync requests begin colliding on page version numbers.
         const updatedPage = await this.confluenceClient.updatePage(updateRequest);
+        console.info('[DocumentationSync] Structured Confluence page update applied', {
+            pageId: currentPage.id,
+            title: currentPage.title,
+            pageInitialized: options.pageInitialized,
+            structuredContentUpdated: options.structuredContentUpdated,
+            historyEntryCount: options.historyEntryCount,
+            usedLegacyMigrationEntry: options.usedLegacyMigrationEntry,
+        });
         return {
             previousPage: currentPage,
             updatedPage,
+            pageInitialized: options.pageInitialized,
+            structuredContentUpdated: options.structuredContentUpdated,
+            historyEntryCount: options.historyEntryCount,
+            usedLegacyMigrationEntry: options.usedLegacyMigrationEntry,
         };
     }
 }
