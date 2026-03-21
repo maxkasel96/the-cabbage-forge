@@ -24,6 +24,23 @@ function requireNonEmptyString(value: unknown, fieldName: keyof DocumentationWeb
   return value.trim();
 }
 
+function optionalNonEmptyString(
+  value: unknown,
+  fieldName: keyof DocumentationWebhookPayload
+): string | undefined {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new AppError('BAD_REQUEST', `${fieldName} must be a non-empty string when provided.`, 400, {
+      field: fieldName,
+    });
+  }
+
+  return value.trim();
+}
+
 function requireSupportedSource(value: string): SupportedSource {
   if (!SUPPORTED_SOURCES.includes(value as SupportedSource)) {
     throw new AppError('BAD_REQUEST', 'source is not supported.', 400, {
@@ -58,18 +75,38 @@ function requireIsoTimestamp(value: string): string {
   return value;
 }
 
+function assertRoutingFieldsPresent(payload: ValidatedDocumentationWebhookPayload): void {
+  if (payload.feature || payload.system || payload.integration || payload.release || payload.incidentId) {
+    return;
+  }
+
+  if (payload.eventType === 'release' || payload.eventType === 'incident') {
+    return;
+  }
+
+  throw new AppError('BAD_REQUEST', 'Payload must include at least one routing identifier field.', 400, {
+    requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId'],
+    receivedEventType: payload.eventType,
+  });
+}
+
 export function validateDocumentationWebhookPayload(
   payload: DocumentationWebhookPayload
 ): ValidatedDocumentationWebhookPayload {
-  const source = requireSupportedSource(requireNonEmptyString(payload.source, 'source'));
-  const eventType = requireSupportedEventType(requireNonEmptyString(payload.eventType, 'eventType'));
-
-  return {
-    source,
-    eventType,
-    feature: requireNonEmptyString(payload.feature, 'feature'),
+  const validatedPayload: ValidatedDocumentationWebhookPayload = {
+    source: requireSupportedSource(requireNonEmptyString(payload.source, 'source')),
+    eventType: requireSupportedEventType(requireNonEmptyString(payload.eventType, 'eventType')),
+    feature: optionalNonEmptyString(payload.feature, 'feature'),
+    system: optionalNonEmptyString(payload.system, 'system'),
+    integration: optionalNonEmptyString(payload.integration, 'integration'),
+    release: optionalNonEmptyString(payload.release, 'release'),
+    incidentId: optionalNonEmptyString(payload.incidentId, 'incidentId'),
     summary: requireNonEmptyString(payload.summary, 'summary'),
     message: requireNonEmptyString(payload.message, 'message'),
     timestamp: requireIsoTimestamp(requireNonEmptyString(payload.timestamp, 'timestamp')),
   };
+
+  assertRoutingFieldsPresent(validatedPayload);
+
+  return validatedPayload;
 }

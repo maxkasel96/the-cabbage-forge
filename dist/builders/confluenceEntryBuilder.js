@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.renderMetadataBlock = renderMetadataBlock;
 exports.renderHistoryEntry = renderHistoryEntry;
 exports.mergeExistingContentWithNewUpdate = mergeExistingContentWithNewUpdate;
-exports.renderFeaturePage = renderFeaturePage;
+exports.renderDocumentationPage = renderDocumentationPage;
 const PAGE_LAYOUT_MARKER = 'DOC_SYNC_LAYOUT_V1';
 const HISTORY_START_MARKER = '<!-- DOC_SYNC_HISTORY_START -->';
 const HISTORY_END_MARKER = '<!-- DOC_SYNC_HISTORY_END -->';
@@ -32,7 +32,27 @@ function renderParagraphs(value) {
         .map((line) => `<p>${escapeStorageValue(line)}</p>`)
         .join('\n');
 }
-function renderMetadataBlock(payload) {
+function renderOptionalMetadataRow(label, value) {
+    if (!value) {
+        return '';
+    }
+    return `
+    <tr>
+      <th><p>${escapeStorageValue(label)}</p></th>
+      <td><p>${escapeStorageValue(value)}</p></td>
+    </tr>
+  `.trim();
+}
+function renderMetadataBlock(payload, route) {
+    const optionalRows = [
+        renderOptionalMetadataRow('Feature', payload.feature),
+        renderOptionalMetadataRow('System', payload.system),
+        renderOptionalMetadataRow('Integration', payload.integration),
+        renderOptionalMetadataRow('Release', payload.release),
+        renderOptionalMetadataRow('Incident ID', payload.incidentId),
+    ]
+        .filter((row) => row.length > 0)
+        .join('\n');
     return `
 <table data-layout="default">
   <tbody>
@@ -49,10 +69,14 @@ function renderMetadataBlock(payload) {
       <td><p>${escapeStorageValue(payload.timestamp)}</p></td>
     </tr>
     <tr>
-      <th><p>Feature</p></th>
-      <td><p>${escapeStorageValue(payload.feature)}</p></td>
+      <th><p>Page Type</p></th>
+      <td><p>${escapeStorageValue(route.pageType)}</p></td>
     </tr>
-  </tbody>
+    <tr>
+      <th><p>Routing Source</p></th>
+      <td><p>${escapeStorageValue(route.routingSource)}</p></td>
+    </tr>
+${optionalRows ? `${optionalRows}\n` : ''}  </tbody>
 </table>
   `.trim();
 }
@@ -114,16 +138,20 @@ function mergeExistingContentWithNewUpdate(existingContent, payload) {
         usedLegacyMigrationEntry,
     };
 }
-function renderFeaturePage(payload, historyEntries) {
+/**
+ * The renderer intentionally stays generic: every page type gets the same structured sections today, while the route
+ * object gives us a clean hook for small page-type-specific tweaks later if we ever need them.
+ */
+function renderDocumentationPage(payload, route, historyEntries) {
     return `
 <!-- ${PAGE_LAYOUT_MARKER} -->
-<h1>${escapeStorageValue(payload.feature)}</h1>
+<h1>${escapeStorageValue(route.pageHeading)}</h1>
 <h2>Summary</h2>
 ${renderParagraphs(payload.summary)}
 <h2>Latest Update</h2>
 ${renderParagraphs(payload.message)}
 <h2>Metadata</h2>
-${renderMetadataBlock(payload)}
+${renderMetadataBlock(payload, route)}
 <h2>Change History</h2>
 ${HISTORY_START_MARKER}
 ${historyEntries.join('\n')}

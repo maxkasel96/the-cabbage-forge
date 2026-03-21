@@ -4,10 +4,29 @@ import type { SUPPORTED_EVENT_TYPES, SUPPORTED_SOURCES } from '../config/constan
 export type SupportedSource = (typeof SUPPORTED_SOURCES)[number];
 export type SupportedEventType = (typeof SUPPORTED_EVENT_TYPES)[number];
 
+export type DocumentationPageType =
+  | 'feature-page'
+  | 'system-page'
+  | 'integration-page'
+  | 'release-page'
+  | 'incident-page';
+
+export type DocumentationRoutingSource =
+  | 'feature'
+  | 'system'
+  | 'integration'
+  | 'release'
+  | 'incidentId'
+  | 'timestamp';
+
 export interface DocumentationWebhookPayload {
   source: string;
   eventType: string;
-  feature: string;
+  feature?: string;
+  system?: string;
+  integration?: string;
+  release?: string;
+  incidentId?: string;
   summary: string;
   message: string;
   timestamp: string;
@@ -16,17 +35,22 @@ export interface DocumentationWebhookPayload {
 export interface ValidatedDocumentationWebhookPayload {
   source: SupportedSource;
   eventType: SupportedEventType;
-  feature: string;
+  feature?: string;
+  system?: string;
+  integration?: string;
+  release?: string;
+  incidentId?: string;
   summary: string;
   message: string;
   timestamp: string;
 }
 
 export interface DocumentationPageRoute {
+  pageType: DocumentationPageType;
   pageTitle: string;
-  pageType: 'feature-page';
-  featureKey: string;
-  normalizedFeature: string;
+  pageHeading: string;
+  identifier: string;
+  routingSource: DocumentationRoutingSource;
 }
 
 export interface ForgeWebTriggerRequest {
@@ -58,6 +82,9 @@ export interface SuccessResponseBody<TData> {
 export interface DocumentationSyncResult {
   pageId: string;
   title: string;
+  pageTitle: string;
+  pageType: DocumentationPageType;
+  routingSource: DocumentationRoutingSource;
   spaceId: string;
   spaceKey: string;
   previousVersion: number;

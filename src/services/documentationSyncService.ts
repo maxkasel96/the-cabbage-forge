@@ -1,6 +1,6 @@
 import {
   mergeExistingContentWithNewUpdate,
-  renderFeaturePage,
+  renderDocumentationPage,
 } from '../builders/confluenceEntryBuilder';
 import {
   CONFLUENCE_TARGET_PAGE_ID,
@@ -8,7 +8,7 @@ import {
   WEBHOOK_SUCCESS_MESSAGE,
 } from '../config/constants';
 import type { ConfluenceClient } from '../clients/confluenceClient';
-import { routeDocumentationPage } from '../routing/documentationPageRouter';
+import { resolveRoute } from '../routing/documentationPageRouter';
 import type { DocumentationSyncResult, ValidatedDocumentationWebhookPayload } from '../types/webhook';
 import { ConfluencePageService } from './confluencePageService';
 
@@ -28,14 +28,14 @@ export class DocumentationSyncService {
      * response contract for the caller. This gives us a clean place to add richer workflows later without bloating the
      * HTTP handler.
      */
-    const route = routeDocumentationPage(payload);
+    const route = resolveRoute(payload);
     const resolvedTarget = await this.confluencePageService.resolvePageTarget(
       CONFLUENCE_TARGET_PAGE_ID,
       route.pageTitle
     );
     const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
     const mergeResult = mergeExistingContentWithNewUpdate(existingContent, payload);
-    const renderedPage = renderFeaturePage(payload, mergeResult.historyEntries);
+    const renderedPage = renderDocumentationPage(payload, route, mergeResult.historyEntries);
     const updateResult = await this.confluencePageService.updatePageBody(
       resolvedTarget.page.id,
       resolvedTarget.page.spaceId,
@@ -48,9 +48,20 @@ export class DocumentationSyncService {
       }
     );
 
+    console.info('[DocumentationSync] Documentation route resolved', {
+      pageType: route.pageType,
+      pageTitle: route.pageTitle,
+      routingSource: route.routingSource,
+      identifier: route.identifier,
+      eventType: payload.eventType,
+    });
+
     return {
       pageId: updateResult.updatedPage.id,
       title: updateResult.updatedPage.title,
+      pageTitle: route.pageTitle,
+      pageType: route.pageType,
+      routingSource: route.routingSource,
       spaceId: updateResult.updatedPage.spaceId,
       spaceKey: CONFLUENCE_TARGET_SPACE_KEY,
       previousVersion: updateResult.previousPage.version.number,
