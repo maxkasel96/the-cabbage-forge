@@ -1,6 +1,5 @@
 import { buildConfluenceDocumentationEntry } from '../builders/confluenceEntryBuilder';
 import {
-  CONFLUENCE_FALLBACK_PAGE_TITLE,
   CONFLUENCE_TARGET_PAGE_ID,
   CONFLUENCE_TARGET_SPACE_KEY,
   WEBHOOK_SUCCESS_MESSAGE,
@@ -47,11 +46,10 @@ export class DocumentationSyncService {
       eventType: payload.eventType,
       source: payload.source,
       timestamp: payload.timestamp,
-      message: resolvedTarget.usedFallbackPage
-        ? `${WEBHOOK_SUCCESS_MESSAGE} Feature page not found, so the fallback page (${CONFLUENCE_FALLBACK_PAGE_TITLE}) was updated instead.`
-        : WEBHOOK_SUCCESS_MESSAGE,
+      message: WEBHOOK_SUCCESS_MESSAGE,
       route,
       usedFallbackPage: resolvedTarget.usedFallbackPage,
+      createdPage: resolvedTarget.createdPage,
     };
   }
 }

@@ -2,6 +2,8 @@ import api, { route } from '@forge/api';
 
 import { AppError } from '../errors/appError';
 import type {
+  ConfluencePageCreateRequest,
+  ConfluencePageCreateResponse,
   ConfluencePageListResponse,
   ConfluencePageReadModel,
   ConfluencePageUpdateRequest,
@@ -74,6 +76,19 @@ export class ConfluenceClient {
     const parsedResponse = await parseJsonResponse<ConfluencePageListResponse>(response, 'find page by title');
 
     return parsedResponse.results[0];
+  }
+
+  async createPage(payload: ConfluencePageCreateRequest): Promise<ConfluencePageCreateResponse> {
+    const response = await api.asApp().requestConfluence(route`/wiki/api/v2/pages`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return parseJsonResponse<ConfluencePageCreateResponse>(response, 'create page');
   }
 
   async updatePage(payload: ConfluencePageUpdateRequest): Promise<ConfluencePageUpdateResponse> {

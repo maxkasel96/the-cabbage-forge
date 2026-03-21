@@ -84,6 +84,17 @@ class ConfluenceClient {
         const parsedResponse = await parseJsonResponse(response, 'find page by title');
         return parsedResponse.results[0];
     }
+    async createPage(payload) {
+        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        return parseJsonResponse(response, 'create page');
+    }
     async updatePage(payload) {
         const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages/${payload.id}`, {
             method: 'PUT',

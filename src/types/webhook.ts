@@ -68,4 +68,5 @@ export interface DocumentationSyncResult {
   message: string;
   route: DocumentationPageRoute;
   usedFallbackPage: boolean;
+  createdPage: boolean;
 }
