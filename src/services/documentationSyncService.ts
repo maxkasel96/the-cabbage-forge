@@ -1,3 +1,4 @@
+import { extractIndexEntries, renderIndexPage } from '../builders/confluenceIndexBuilder';
 import {
   mergeExistingContentWithNewUpdate,
   renderDocumentationPage,
@@ -8,6 +9,14 @@ import {
   WEBHOOK_SUCCESS_MESSAGE,
 } from '../config/constants';
 import type { ConfluenceClient } from '../clients/confluenceClient';
+import {
+  buildIndexEntry,
+  buildNavigationSection,
+  ensureIndexPageExists,
+  getIndexPageTitle,
+  getRelatedIndexPageType,
+  updateIndexPage,
+} from '../helpers/documentationIndexing';
 import { resolveRoute } from '../routing/documentationPageRouter';
 import type { DocumentationSyncResult, ValidatedDocumentationWebhookPayload } from '../types/webhook';
 import { ConfluencePageService } from './confluencePageService';
@@ -23,19 +32,32 @@ export class DocumentationSyncService {
     payload: ValidatedDocumentationWebhookPayload
   ): Promise<DocumentationSyncResult> {
     /**
-     * The orchestration layer deliberately stays small: derive the page route, build the Confluence-safe storage body,
-     * refresh the structured sections with the newest payload, preserve prior history entries, and then return a stable
-     * response contract for the caller. This gives us a clean place to add richer workflows later without bloating the
-     * HTTP handler.
+     * The orchestration layer deliberately stays small: derive the page route, ensure the routed page and its matching
+     * index page both exist, refresh the structured sections with the newest payload, preserve prior history entries,
+     * and then return a stable response contract for the caller.
      */
     const route = resolveRoute(payload);
+    const indexPageTitle = getIndexPageTitle(route.pageType);
+    const relatedIndexPageType = getRelatedIndexPageType(route.pageType);
+
     const resolvedTarget = await this.confluencePageService.resolvePageTarget(
       CONFLUENCE_TARGET_PAGE_ID,
       route.pageTitle
     );
+    const ensuredIndexPage = await ensureIndexPageExists(
+      this.confluencePageService,
+      CONFLUENCE_TARGET_PAGE_ID,
+      route.pageType
+    );
     const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
     const mergeResult = mergeExistingContentWithNewUpdate(existingContent, payload);
-    const renderedPage = renderDocumentationPage(payload, route, mergeResult.historyEntries);
+    const navigationSection = buildNavigationSection(route, ensuredIndexPage.page);
+    const renderedPage = renderDocumentationPage(
+      payload,
+      route,
+      mergeResult.historyEntries,
+      navigationSection
+    );
     const updateResult = await this.confluencePageService.updatePageBody(
       resolvedTarget.page.id,
       resolvedTarget.page.spaceId,
@@ -48,12 +70,45 @@ export class DocumentationSyncService {
       }
     );
 
+    const existingIndexEntries = extractIndexEntries(ensuredIndexPage.page.body?.storage?.value ?? '');
+    const indexEntry = buildIndexEntry(route, updateResult.updatedPage, payload.timestamp);
+    const nextIndexState = updateIndexPage(existingIndexEntries, indexEntry);
+    let indexUpdated = ensuredIndexPage.createdPage || nextIndexState.indexUpdated;
+
+    if (indexUpdated) {
+      const renderedIndexPage = renderIndexPage({
+        indexPageTitle,
+        indexPageType: relatedIndexPageType,
+        entries: nextIndexState.entries,
+        generatedAt: payload.timestamp,
+      });
+
+      if (renderedIndexPage !== (ensuredIndexPage.page.body?.storage?.value ?? '')) {
+        await this.confluencePageService.updatePageBody(
+          ensuredIndexPage.page.id,
+          ensuredIndexPage.page.spaceId,
+          renderedIndexPage,
+          {
+            pageInitialized: ensuredIndexPage.createdPage,
+            structuredContentUpdated: !ensuredIndexPage.createdPage,
+            historyEntryCount: nextIndexState.entries.length,
+            usedLegacyMigrationEntry: false,
+          }
+        );
+      } else {
+        indexUpdated = false;
+      }
+    }
+
     console.info('[DocumentationSync] Documentation route resolved', {
       pageType: route.pageType,
       pageTitle: route.pageTitle,
       routingSource: route.routingSource,
       identifier: route.identifier,
       eventType: payload.eventType,
+      indexPageTitle,
+      relatedIndexPageType,
+      indexUpdated,
     });
 
     return {
@@ -73,6 +128,9 @@ export class DocumentationSyncService {
       route,
       usedFallbackPage: resolvedTarget.usedFallbackPage,
       createdPage: resolvedTarget.createdPage,
+      indexPageTitle,
+      relatedIndexPageType,
+      indexUpdated,
     };
   }
 }

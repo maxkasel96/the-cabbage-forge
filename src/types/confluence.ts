@@ -53,3 +53,8 @@ export interface ConfluencePageUpdateResponse {
 export interface ConfluencePageListResponse {
   results: ConfluencePageReadModel[];
 }
+
+export interface EnsureConfluencePageResult {
+  page: ConfluencePageReadModel;
+  createdPage: boolean;
+}
