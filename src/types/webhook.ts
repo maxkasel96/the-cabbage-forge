@@ -11,6 +11,13 @@ export type DocumentationPageType =
   | 'release-page'
   | 'incident-page';
 
+export type DocumentationIndexPageType =
+  | 'features-index'
+  | 'systems-index'
+  | 'integrations-index'
+  | 'releases-index'
+  | 'incidents-index';
+
 export type DocumentationRoutingSource =
   | 'feature'
   | 'system'
@@ -51,6 +58,15 @@ export interface DocumentationPageRoute {
   pageHeading: string;
   identifier: string;
   routingSource: DocumentationRoutingSource;
+}
+
+export interface DocumentationIndexEntry {
+  pageId: string;
+  pageTitle: string;
+  pageType: DocumentationPageType;
+  identifier: string;
+  pageUrl: string;
+  lastUpdated?: string;
 }
 
 export interface ForgeWebTriggerRequest {
@@ -96,4 +112,7 @@ export interface DocumentationSyncResult {
   route: DocumentationPageRoute;
   usedFallbackPage: boolean;
   createdPage: boolean;
+  indexPageTitle: string;
+  relatedIndexPageType: DocumentationIndexPageType;
+  indexUpdated: boolean;
 }

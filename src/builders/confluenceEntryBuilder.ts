@@ -1,35 +1,9 @@
 import type { DocumentationPageRoute, ValidatedDocumentationWebhookPayload } from '../types/webhook';
+import { escapeStorageValue, renderParagraphs } from './confluenceStorage';
 
 const PAGE_LAYOUT_MARKER = 'DOC_SYNC_LAYOUT_V1';
 const HISTORY_START_MARKER = '<!-- DOC_SYNC_HISTORY_START -->';
 const HISTORY_END_MARKER = '<!-- DOC_SYNC_HISTORY_END -->';
-
-/**
- * Confluence storage format is XML-like markup, so every user-controlled string needs to be escaped before it is
- * interpolated into the page body. Keeping the escaping logic local to this renderer reduces the chance of a future
- * refactor forgetting to sanitize one field when more sections are added.
- */
-function escapeStorageValue(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * The webhook payload can contain line breaks, especially inside summaries or human-authored update messages.
- * Rendering each line as its own paragraph keeps the Confluence page readable without having to introduce a more
- * fragile HTML parser or allow arbitrary inbound markup.
- */
-function renderParagraphs(value: string): string {
-  return value
-    .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .map((line) => `<p>${escapeStorageValue(line)}</p>`)
-    .join('\n');
-}
 
 function renderOptionalMetadataRow(label: string, value?: string): string {
   if (!value) {
@@ -169,11 +143,13 @@ export function mergeExistingContentWithNewUpdate(
 export function renderDocumentationPage(
   payload: ValidatedDocumentationWebhookPayload,
   route: DocumentationPageRoute,
-  historyEntries: string[]
+  historyEntries: string[],
+  navigationSection: string
 ): string {
   return `
 <!-- ${PAGE_LAYOUT_MARKER} -->
 <h1>${escapeStorageValue(route.pageHeading)}</h1>
+${navigationSection}
 <h2>Summary</h2>
 ${renderParagraphs(payload.summary)}
 <h2>Latest Update</h2>

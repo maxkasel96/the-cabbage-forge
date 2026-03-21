@@ -4,42 +4,18 @@ exports.renderMetadataBlock = renderMetadataBlock;
 exports.renderHistoryEntry = renderHistoryEntry;
 exports.mergeExistingContentWithNewUpdate = mergeExistingContentWithNewUpdate;
 exports.renderDocumentationPage = renderDocumentationPage;
+const confluenceStorage_1 = require("./confluenceStorage");
 const PAGE_LAYOUT_MARKER = 'DOC_SYNC_LAYOUT_V1';
 const HISTORY_START_MARKER = '<!-- DOC_SYNC_HISTORY_START -->';
 const HISTORY_END_MARKER = '<!-- DOC_SYNC_HISTORY_END -->';
-/**
- * Confluence storage format is XML-like markup, so every user-controlled string needs to be escaped before it is
- * interpolated into the page body. Keeping the escaping logic local to this renderer reduces the chance of a future
- * refactor forgetting to sanitize one field when more sections are added.
- */
-function escapeStorageValue(value) {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-/**
- * The webhook payload can contain line breaks, especially inside summaries or human-authored update messages.
- * Rendering each line as its own paragraph keeps the Confluence page readable without having to introduce a more
- * fragile HTML parser or allow arbitrary inbound markup.
- */
-function renderParagraphs(value) {
-    return value
-        .split(/\r?\n/)
-        .filter((line) => line.trim().length > 0)
-        .map((line) => `<p>${escapeStorageValue(line)}</p>`)
-        .join('\n');
-}
 function renderOptionalMetadataRow(label, value) {
     if (!value) {
         return '';
     }
     return `
     <tr>
-      <th><p>${escapeStorageValue(label)}</p></th>
-      <td><p>${escapeStorageValue(value)}</p></td>
+      <th><p>${(0, confluenceStorage_1.escapeStorageValue)(label)}</p></th>
+      <td><p>${(0, confluenceStorage_1.escapeStorageValue)(value)}</p></td>
     </tr>
   `.trim();
 }
@@ -58,23 +34,23 @@ function renderMetadataBlock(payload, route) {
   <tbody>
     <tr>
       <th><p>Source</p></th>
-      <td><p>${escapeStorageValue(payload.source)}</p></td>
+      <td><p>${(0, confluenceStorage_1.escapeStorageValue)(payload.source)}</p></td>
     </tr>
     <tr>
       <th><p>Event Type</p></th>
-      <td><p>${escapeStorageValue(payload.eventType)}</p></td>
+      <td><p>${(0, confluenceStorage_1.escapeStorageValue)(payload.eventType)}</p></td>
     </tr>
     <tr>
       <th><p>Timestamp</p></th>
-      <td><p>${escapeStorageValue(payload.timestamp)}</p></td>
+      <td><p>${(0, confluenceStorage_1.escapeStorageValue)(payload.timestamp)}</p></td>
     </tr>
     <tr>
       <th><p>Page Type</p></th>
-      <td><p>${escapeStorageValue(route.pageType)}</p></td>
+      <td><p>${(0, confluenceStorage_1.escapeStorageValue)(route.pageType)}</p></td>
     </tr>
     <tr>
       <th><p>Routing Source</p></th>
-      <td><p>${escapeStorageValue(route.routingSource)}</p></td>
+      <td><p>${(0, confluenceStorage_1.escapeStorageValue)(route.routingSource)}</p></td>
     </tr>
 ${optionalRows ? `${optionalRows}\n` : ''}  </tbody>
 </table>
@@ -83,11 +59,11 @@ ${optionalRows ? `${optionalRows}\n` : ''}  </tbody>
 function renderHistoryEntry(payload) {
     return `
 <ac:structured-macro ac:name="expand">
-  <ac:parameter ac:name="title">${escapeStorageValue(payload.timestamp)} — ${escapeStorageValue(payload.eventType)}</ac:parameter>
+  <ac:parameter ac:name="title">${(0, confluenceStorage_1.escapeStorageValue)(payload.timestamp)} — ${(0, confluenceStorage_1.escapeStorageValue)(payload.eventType)}</ac:parameter>
   <ac:rich-text-body>
-    <p><strong>Timestamp:</strong> ${escapeStorageValue(payload.timestamp)}</p>
-    <p><strong>Event Type:</strong> ${escapeStorageValue(payload.eventType)}</p>
-    <p><strong>Message:</strong> ${escapeStorageValue(payload.message)}</p>
+    <p><strong>Timestamp:</strong> ${(0, confluenceStorage_1.escapeStorageValue)(payload.timestamp)}</p>
+    <p><strong>Event Type:</strong> ${(0, confluenceStorage_1.escapeStorageValue)(payload.eventType)}</p>
+    <p><strong>Message:</strong> ${(0, confluenceStorage_1.escapeStorageValue)(payload.message)}</p>
   </ac:rich-text-body>
 </ac:structured-macro>
   `.trim();
@@ -142,14 +118,15 @@ function mergeExistingContentWithNewUpdate(existingContent, payload) {
  * The renderer intentionally stays generic: every page type gets the same structured sections today, while the route
  * object gives us a clean hook for small page-type-specific tweaks later if we ever need them.
  */
-function renderDocumentationPage(payload, route, historyEntries) {
+function renderDocumentationPage(payload, route, historyEntries, navigationSection) {
     return `
 <!-- ${PAGE_LAYOUT_MARKER} -->
-<h1>${escapeStorageValue(route.pageHeading)}</h1>
+<h1>${(0, confluenceStorage_1.escapeStorageValue)(route.pageHeading)}</h1>
+${navigationSection}
 <h2>Summary</h2>
-${renderParagraphs(payload.summary)}
+${(0, confluenceStorage_1.renderParagraphs)(payload.summary)}
 <h2>Latest Update</h2>
-${renderParagraphs(payload.message)}
+${(0, confluenceStorage_1.renderParagraphs)(payload.message)}
 <h2>Metadata</h2>
 ${renderMetadataBlock(payload, route)}
 <h2>Change History</h2>

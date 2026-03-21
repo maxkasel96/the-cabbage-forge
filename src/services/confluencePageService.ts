@@ -4,6 +4,7 @@ import type {
   ConfluencePageReadModel,
   ConfluencePageUpdateRequest,
   ConfluencePageUpdateResponse,
+  EnsureConfluencePageResult,
 } from '../types/confluence';
 
 export interface UpdateStructuredPageResult {
@@ -42,21 +43,21 @@ export class ConfluencePageService {
     console.info('[DocumentationSync] Resolved Confluence page target', details);
   }
 
-  private async createPageForRoute(
-    routedPageTitle: string,
+  private async createPageForTitle(
+    pageTitle: string,
     fallbackPage: ConfluencePageReadModel
   ): Promise<ConfluencePageReadModel> {
     /**
      * We use the configured page as a hierarchy anchor instead of a content fallback.
      *
-     * When that anchor already has a parent, the new feature page is created as a sibling by reusing the same parentId.
+     * When that anchor already has a parent, the new page is created as a sibling by reusing the same parentId.
      * If the anchor page is top-level, we omit parentId so Confluence creates the new page at the top level of the
      * target space. This keeps page placement predictable without introducing extra configuration.
      */
     const createdPage = await this.confluenceClient.createPage({
       spaceId: fallbackPage.spaceId,
       status: 'current',
-      title: routedPageTitle,
+      title: pageTitle,
       ...(fallbackPage.parentId ? { parentId: fallbackPage.parentId } : {}),
       body: {
         representation: 'storage',
@@ -67,32 +68,31 @@ export class ConfluencePageService {
     return this.confluenceClient.getPage(createdPage.id);
   }
 
-  async resolvePageTarget(fallbackPageId: string, routedPageTitle: string): Promise<ResolvedConfluencePageTarget> {
+  async ensurePageExists(fallbackPageId: string, pageTitle: string): Promise<EnsureConfluencePageResult> {
     const fallbackPage = await this.confluenceClient.getPage(fallbackPageId);
-    const routedPage = await this.confluenceClient.findPageByTitleInSpace(routedPageTitle, fallbackPage.spaceId);
+    const existingPage = await this.confluenceClient.findPageByTitleInSpace(pageTitle, fallbackPage.spaceId);
 
-    if (routedPage) {
+    if (existingPage) {
       this.logResolvedPageTarget({
-        routedPageTitle,
+        routedPageTitle: pageTitle,
         pageFound: true,
         createdPage: false,
         usedFallbackPage: false,
-        pageId: routedPage.id,
-        spaceId: routedPage.spaceId,
-        parentPageId: routedPage.parentId,
+        pageId: existingPage.id,
+        spaceId: existingPage.spaceId,
+        parentPageId: existingPage.parentId,
       });
 
       return {
-        page: routedPage,
-        usedFallbackPage: false,
+        page: existingPage,
         createdPage: false,
       };
     }
 
-    const createdPage = await this.createPageForRoute(routedPageTitle, fallbackPage);
+    const createdPage = await this.createPageForTitle(pageTitle, fallbackPage);
 
     this.logResolvedPageTarget({
-      routedPageTitle,
+      routedPageTitle: pageTitle,
       pageFound: false,
       createdPage: true,
       usedFallbackPage: false,
@@ -103,8 +103,17 @@ export class ConfluencePageService {
 
     return {
       page: createdPage,
-      usedFallbackPage: false,
       createdPage: true,
+    };
+  }
+
+  async resolvePageTarget(fallbackPageId: string, routedPageTitle: string): Promise<ResolvedConfluencePageTarget> {
+    const resolvedPage = await this.ensurePageExists(fallbackPageId, routedPageTitle);
+
+    return {
+      page: resolvedPage.page,
+      usedFallbackPage: false,
+      createdPage: resolvedPage.createdPage,
     };
   }
 
