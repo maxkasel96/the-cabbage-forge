@@ -2,6 +2,10 @@ import api, { route } from '@forge/api';
 
 import { AppError } from '../errors/appError';
 import type {
+  ConfluenceContentProperty,
+  ConfluenceContentPropertyCreateRequest,
+  ConfluenceContentPropertyListResponse,
+  ConfluenceContentPropertyUpdateRequest,
   ConfluencePageCreateRequest,
   ConfluencePageCreateResponse,
   ConfluencePageListResponse,
@@ -76,6 +80,70 @@ export class ConfluenceClient {
     const parsedResponse = await parseJsonResponse<ConfluencePageListResponse>(response, 'find page by title');
 
     return parsedResponse.results[0];
+  }
+
+  async getPageProperty<TValue>(
+    pageId: string,
+    propertyKey: string
+  ): Promise<ConfluenceContentProperty<TValue> | undefined> {
+    /**
+     * Confluence exposes content properties as a separate collection from the visible page body.
+     *
+     * Reading that collection lets us keep structured index-entry state without leaking raw serialized payloads into the
+     * rendered page that end users see.
+     */
+    const response = await api.asApp().requestConfluence(
+      route`/wiki/api/v2/pages/${pageId}/properties?key=${propertyKey}&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      }
+    );
+
+    const parsedResponse = await parseJsonResponse<ConfluenceContentPropertyListResponse<TValue>>(
+      response,
+      'get page property'
+    );
+
+    return parsedResponse.results[0];
+  }
+
+  async createPageProperty<TValue>(
+    pageId: string,
+    payload: ConfluenceContentPropertyCreateRequest<TValue>
+  ): Promise<ConfluenceContentProperty<TValue>> {
+    const response = await api.asApp().requestConfluence(route`/wiki/api/v2/pages/${pageId}/properties`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return parseJsonResponse<ConfluenceContentProperty<TValue>>(response, 'create page property');
+  }
+
+  async updatePageProperty<TValue>(
+    pageId: string,
+    propertyId: string,
+    payload: ConfluenceContentPropertyUpdateRequest<TValue>
+  ): Promise<ConfluenceContentProperty<TValue>> {
+    const response = await api.asApp().requestConfluence(
+      route`/wiki/api/v2/pages/${pageId}/properties/${propertyId}`,
+      {
+        method: 'PUT',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    return parseJsonResponse<ConfluenceContentProperty<TValue>>(response, 'update page property');
   }
 
   async createPage(payload: ConfluencePageCreateRequest): Promise<ConfluencePageCreateResponse> {

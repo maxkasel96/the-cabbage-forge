@@ -1,4 +1,4 @@
-import { extractIndexEntries, renderIndexPage } from '../builders/confluenceIndexBuilder';
+import { renderIndexPage } from '../builders/confluenceIndexBuilder';
 import {
   mergeExistingContentWithNewUpdate,
   renderDocumentationPage,
@@ -70,20 +70,34 @@ export class DocumentationSyncService {
       }
     );
 
-    const existingIndexEntries = extractIndexEntries(ensuredIndexPage.page.body?.storage?.value ?? '');
+    const indexState = await this.confluencePageService.loadIndexEntries(ensuredIndexPage.page);
     const indexEntry = buildIndexEntry(route, updateResult.updatedPage, payload.timestamp);
-    const nextIndexState = updateIndexPage(existingIndexEntries, indexEntry);
-    let indexUpdated = ensuredIndexPage.createdPage || nextIndexState.indexUpdated;
+    const nextIndexState = updateIndexPage(indexState.entries, indexEntry);
+    const renderedIndexPage = renderIndexPage({
+      indexPageTitle,
+      indexPageType: relatedIndexPageType,
+      entries: nextIndexState.entries,
+    });
+    const existingIndexBody = ensuredIndexPage.page.body?.storage?.value ?? '';
+    const indexBodyChanged = renderedIndexPage !== existingIndexBody;
+    const indexPropertyChanged =
+      indexState.usedLegacyBodyFallback ||
+      !indexState.property ||
+      JSON.stringify(indexState.entries) !== JSON.stringify(nextIndexState.entries);
+    let indexUpdated =
+      ensuredIndexPage.createdPage ||
+      nextIndexState.indexUpdated ||
+      indexBodyChanged ||
+      indexPropertyChanged;
 
     if (indexUpdated) {
-      const renderedIndexPage = renderIndexPage({
-        indexPageTitle,
-        indexPageType: relatedIndexPageType,
-        entries: nextIndexState.entries,
-        generatedAt: payload.timestamp,
-      });
-
-      if (renderedIndexPage !== (ensuredIndexPage.page.body?.storage?.value ?? '')) {
+      /**
+       * Re-rendering the entire index page body is more reliable than trying to mutate fragments in place.
+       *
+       * That keeps the visible Confluence markup deterministic while letting the page property carry any richer state
+       * we still need for duplicate prevention and future updates.
+       */
+      if (indexBodyChanged) {
         await this.confluencePageService.updatePageBody(
           ensuredIndexPage.page.id,
           ensuredIndexPage.page.spaceId,
@@ -92,10 +106,20 @@ export class DocumentationSyncService {
             pageInitialized: ensuredIndexPage.createdPage,
             structuredContentUpdated: !ensuredIndexPage.createdPage,
             historyEntryCount: nextIndexState.entries.length,
-            usedLegacyMigrationEntry: false,
+            usedLegacyMigrationEntry: indexState.usedLegacyBodyFallback,
           }
         );
-      } else {
+      }
+
+      if (indexPropertyChanged) {
+        await this.confluencePageService.saveIndexEntries(
+          ensuredIndexPage.page.id,
+          nextIndexState.entries,
+          indexState.property
+        );
+      }
+
+      if (!indexBodyChanged && !indexPropertyChanged) {
         indexUpdated = false;
       }
     }

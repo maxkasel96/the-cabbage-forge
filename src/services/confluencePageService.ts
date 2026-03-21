@@ -1,11 +1,14 @@
 import { AppError } from '../errors/appError';
 import type { ConfluenceClient } from '../clients/confluenceClient';
+import { INDEX_ENTRIES_PAGE_PROPERTY_KEY, extractIndexEntriesFromLegacyContent } from '../builders/confluenceIndexBuilder';
 import type {
+  ConfluenceContentProperty,
   ConfluencePageReadModel,
   ConfluencePageUpdateRequest,
   ConfluencePageUpdateResponse,
   EnsureConfluencePageResult,
 } from '../types/confluence';
+import type { DocumentationIndexEntry } from '../types/webhook';
 
 export interface UpdateStructuredPageResult {
   previousPage: ConfluencePageReadModel;
@@ -20,6 +23,12 @@ export interface ResolvedConfluencePageTarget {
   page: ConfluencePageReadModel;
   usedFallbackPage: boolean;
   createdPage: boolean;
+}
+
+export interface LoadedIndexEntriesResult {
+  entries: DocumentationIndexEntry[];
+  property?: ConfluenceContentProperty<DocumentationIndexEntry[]>;
+  usedLegacyBodyFallback: boolean;
 }
 
 export class ConfluencePageService {
@@ -115,6 +124,56 @@ export class ConfluencePageService {
       usedFallbackPage: false,
       createdPage: resolvedPage.createdPage,
     };
+  }
+
+  async loadIndexEntries(indexPage: ConfluencePageReadModel): Promise<LoadedIndexEntriesResult> {
+    /**
+     * New index pages read their structured state from a content property so the visible body can remain clean.
+     *
+     * We still support a legacy body fallback during rollout so already-created pages can self-heal on the next sync
+     * without losing previously indexed child links.
+     */
+    const property = await this.confluenceClient.getPageProperty<DocumentationIndexEntry[]>(
+      indexPage.id,
+      INDEX_ENTRIES_PAGE_PROPERTY_KEY
+    );
+
+    if (property) {
+      return {
+        entries: property.value,
+        property,
+        usedLegacyBodyFallback: false,
+      };
+    }
+
+    return {
+      entries: extractIndexEntriesFromLegacyContent(indexPage.body?.storage?.value ?? ''),
+      property: undefined,
+      usedLegacyBodyFallback: true,
+    };
+  }
+
+  async saveIndexEntries(
+    pageId: string,
+    entries: DocumentationIndexEntry[],
+    property?: ConfluenceContentProperty<DocumentationIndexEntry[]>
+  ): Promise<void> {
+    if (property) {
+      await this.confluenceClient.updatePageProperty(pageId, property.id, {
+        key: property.key,
+        value: entries,
+        version: {
+          number: property.version.number + 1,
+        },
+      });
+
+      return;
+    }
+
+    await this.confluenceClient.createPageProperty(pageId, {
+      key: INDEX_ENTRIES_PAGE_PROPERTY_KEY,
+      value: entries,
+    });
   }
 
   async updatePageBody(

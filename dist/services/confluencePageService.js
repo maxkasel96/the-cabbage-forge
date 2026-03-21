@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConfluencePageService = void 0;
 const appError_1 = require("../errors/appError");
+const confluenceIndexBuilder_1 = require("../builders/confluenceIndexBuilder");
 class ConfluencePageService {
     confluenceClient;
     constructor(confluenceClient) {
@@ -76,6 +77,43 @@ class ConfluencePageService {
             usedFallbackPage: false,
             createdPage: resolvedPage.createdPage,
         };
+    }
+    async loadIndexEntries(indexPage) {
+        /**
+         * New index pages read their structured state from a content property so the visible body can remain clean.
+         *
+         * We still support a legacy body fallback during rollout so already-created pages can self-heal on the next sync
+         * without losing previously indexed child links.
+         */
+        const property = await this.confluenceClient.getPageProperty(indexPage.id, confluenceIndexBuilder_1.INDEX_ENTRIES_PAGE_PROPERTY_KEY);
+        if (property) {
+            return {
+                entries: property.value,
+                property,
+                usedLegacyBodyFallback: false,
+            };
+        }
+        return {
+            entries: (0, confluenceIndexBuilder_1.extractIndexEntriesFromLegacyContent)(indexPage.body?.storage?.value ?? ''),
+            property: undefined,
+            usedLegacyBodyFallback: true,
+        };
+    }
+    async saveIndexEntries(pageId, entries, property) {
+        if (property) {
+            await this.confluenceClient.updatePageProperty(pageId, property.id, {
+                key: property.key,
+                value: entries,
+                version: {
+                    number: property.version.number + 1,
+                },
+            });
+            return;
+        }
+        await this.confluenceClient.createPageProperty(pageId, {
+            key: confluenceIndexBuilder_1.INDEX_ENTRIES_PAGE_PROPERTY_KEY,
+            value: entries,
+        });
     }
     async updatePageBody(pageId, expectedSpaceId, updatedBody, options) {
         const currentPage = await this.confluenceClient.getPage(pageId);
