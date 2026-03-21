@@ -30,11 +30,10 @@ class DocumentationSyncService {
             eventType: payload.eventType,
             source: payload.source,
             timestamp: payload.timestamp,
-            message: resolvedTarget.usedFallbackPage
-                ? `${constants_1.WEBHOOK_SUCCESS_MESSAGE} Feature page not found, so the fallback page (${constants_1.CONFLUENCE_FALLBACK_PAGE_TITLE}) was updated instead.`
-                : constants_1.WEBHOOK_SUCCESS_MESSAGE,
+            message: constants_1.WEBHOOK_SUCCESS_MESSAGE,
             route,
             usedFallbackPage: resolvedTarget.usedFallbackPage,
+            createdPage: resolvedTarget.createdPage,
         };
     }
 }

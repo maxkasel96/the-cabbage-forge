@@ -11,10 +11,19 @@ export interface ConfluencePageReadModel {
   id: string;
   title: string;
   spaceId: string;
+  parentId?: string;
   body: {
     storage: ConfluencePageBodyStorage;
   };
   version: ConfluencePageVersion;
+}
+
+export interface ConfluencePageCreateRequest {
+  spaceId: string;
+  status: 'current';
+  title: string;
+  parentId?: string;
+  body: ConfluencePageBodyStorage;
 }
 
 export interface ConfluencePageUpdateRequest {
@@ -24,6 +33,14 @@ export interface ConfluencePageUpdateRequest {
   spaceId: string;
   version: ConfluencePageVersion;
   body: ConfluencePageBodyStorage;
+}
+
+export interface ConfluencePageCreateResponse {
+  id: string;
+  title: string;
+  spaceId: string;
+  parentId?: string;
+  version: ConfluencePageVersion;
 }
 
 export interface ConfluencePageUpdateResponse {

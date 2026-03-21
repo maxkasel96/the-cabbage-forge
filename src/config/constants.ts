@@ -1,13 +1,14 @@
 export const CONFLUENCE_SITE_BASE_URL = 'https://maxckasel-1768672708733.atlassian.net/wiki';
 export const CONFLUENCE_TARGET_SPACE_KEY = 'TC';
-export const CONFLUENCE_TARGET_PAGE_ID = '21692417';
 
 /**
- * The known page id remains our safe fallback while routing is still in its first pass.
+ * The configured page id still matters even though valid feature routes no longer write to it by default.
  *
- * If a feature-specific page title cannot be resolved to an existing page yet, we keep sending updates here so the
- * webhook remains reliable instead of failing on a missing route target.
+ * We now use this page as the space-and-hierarchy anchor for routed page creation. If routing is ever missing or
+ * invalid, this same configured page remains the safest fallback target because it is already known to exist.
  */
+export const CONFLUENCE_TARGET_PAGE_ID = '21692417';
+
 export const CONFLUENCE_FALLBACK_PAGE_TITLE = 'Docs Sync Test Page';
 
 export const SUPPORTED_SOURCES = ['nextjs-app'] as const;
