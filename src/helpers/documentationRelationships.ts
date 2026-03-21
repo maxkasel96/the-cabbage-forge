@@ -1,117 +1,183 @@
-import { CONFLUENCE_TARGET_PAGE_ID } from '../config/constants';
-import { buildRouteFromRoutingSource } from '../routing/documentationPageRouter';
+import { escapeStorageValue } from '../builders/confluenceStorage';
+import { buildPageTitle, normalizeLiteralIdentifier, normalizeReadableIdentifier } from '../routing/documentationPageRouter';
 import type { ConfluencePageService } from '../services/confluencePageService';
 import type {
   DocumentationPageRoute,
-  DocumentationRoutingSource,
+  DocumentationPageType,
   ResolvedRelatedPage,
   ValidatedDocumentationWebhookPayload,
 } from '../types/webhook';
-import { escapeStorageValue } from '../builders/confluenceStorage';
 import { buildConfluencePageUrl } from './documentationIndexing';
 
-interface RelatedRouteCandidate {
-  routingSource: DocumentationRoutingSource;
+interface RelatedPayloadFieldConfig {
+  fieldName: keyof Pick<
+    ValidatedDocumentationWebhookPayload,
+    | 'relatedFeatures'
+    | 'relatedSystems'
+    | 'relatedIntegrations'
+    | 'relatedReleases'
+    | 'relatedIncidents'
+  >;
+  pageType: DocumentationPageType;
+  normalizeIdentifier: (value: string) => string;
 }
 
-const RELATED_ROUTE_CANDIDATES: RelatedRouteCandidate[] = [
-  { routingSource: 'feature' },
-  { routingSource: 'system' },
-  { routingSource: 'integration' },
-  { routingSource: 'release' },
-  { routingSource: 'incidentId' },
+const RELATED_PAYLOAD_FIELD_CONFIGS: RelatedPayloadFieldConfig[] = [
+  {
+    fieldName: 'relatedFeatures',
+    pageType: 'feature-page',
+    normalizeIdentifier: normalizeReadableIdentifier,
+  },
+  {
+    fieldName: 'relatedSystems',
+    pageType: 'system-page',
+    normalizeIdentifier: normalizeReadableIdentifier,
+  },
+  {
+    fieldName: 'relatedIntegrations',
+    pageType: 'integration-page',
+    normalizeIdentifier: normalizeReadableIdentifier,
+  },
+  {
+    fieldName: 'relatedReleases',
+    pageType: 'release-page',
+    normalizeIdentifier: normalizeLiteralIdentifier,
+  },
+  {
+    fieldName: 'relatedIncidents',
+    pageType: 'incident-page',
+    normalizeIdentifier: normalizeLiteralIdentifier,
+  },
 ];
 
-function getPayloadValueForRoutingSource(
-  payload: ValidatedDocumentationWebhookPayload,
-  routingSource: DocumentationRoutingSource
-): string | undefined {
-  switch (routingSource) {
-    case 'feature':
-      return payload.feature;
-    case 'system':
-      return payload.system;
-    case 'integration':
-      return payload.integration;
-    case 'release':
-      return payload.release;
-    case 'incidentId':
-      return payload.incidentId;
-    default:
-      return undefined;
-  }
+interface RelatedPageReferenceCandidate {
+  pageType: DocumentationPageType;
+  identifier: string;
+  pageTitle: string;
 }
 
-export function dedupeRelatedRoutes(routes: DocumentationPageRoute[]): DocumentationPageRoute[] {
+function buildRelatedPageReferenceCandidate(
+  pageType: DocumentationPageType,
+  rawIdentifier: string,
+  normalizeIdentifier: (value: string) => string
+): RelatedPageReferenceCandidate | undefined {
+  const normalizedIdentifier = normalizeIdentifier(rawIdentifier);
+
+  if (!normalizedIdentifier) {
+    return undefined;
+  }
+
+  return {
+    pageType,
+    identifier: normalizedIdentifier,
+    pageTitle: buildPageTitle({
+      pageType,
+      identifier: normalizedIdentifier,
+    }),
+  };
+}
+
+export function dedupeRelatedPageReferenceCandidates(
+  candidates: RelatedPageReferenceCandidate[]
+): RelatedPageReferenceCandidate[] {
   /**
-   * We deduplicate related routes using the resolved page type plus normalized identifier.
+   * Related documentation must stay payload-driven, so the first deduplication pass happens before any Confluence read.
    *
-   * That keeps duplicate prevention payload-driven and deterministic before we make any Confluence API calls, while
-   * still remaining resilient if different payload fields eventually point at the same title shape.
+   * We key by the exact page title that the seeded page-generation flow already uses. That keeps duplicate prevention
+   * deterministic even when multiple payload arrays accidentally mention the same target more than once.
    */
-  const uniqueRoutes = new Map<string, DocumentationPageRoute>();
+  const uniqueCandidates = new Map<string, RelatedPageReferenceCandidate>();
 
-  for (const route of routes) {
-    uniqueRoutes.set(`${route.pageType}::${route.identifier}`, route);
+  for (const candidate of candidates) {
+    uniqueCandidates.set(candidate.pageTitle, candidate);
   }
 
-  return [...uniqueRoutes.values()];
+  return [...uniqueCandidates.values()];
 }
 
-export function getRelatedRoutesFromPayload(
+export function extractRelatedPageReferencesFromPayload(
   payload: ValidatedDocumentationWebhookPayload,
   primaryRoute: DocumentationPageRoute
-): DocumentationPageRoute[] {
+): RelatedPageReferenceCandidate[] {
   /**
-   * Related links come only from explicit payload routing fields.
+   * We only trust explicit relationship arrays that arrived inside the webhook payload.
    *
-   * We intentionally do not inspect titles, page bodies, or Confluence history. The payload already tells us which
-   * neighboring documentation pages matter for this sync event, so we simply convert those non-primary fields into the
-   * same route objects used elsewhere in the system.
+   * That means we do not infer sideways links from the primary routing fields, page body text, or prior Confluence
+   * state. Each related entry must be declared by the upstream payload contract and mapped to a known documentation
+   * page type via the field that carried it.
    */
-  const candidateRoutes = RELATED_ROUTE_CANDIDATES.flatMap((candidate) => {
-    const rawValue = getPayloadValueForRoutingSource(payload, candidate.routingSource);
+  const extractedCandidates = RELATED_PAYLOAD_FIELD_CONFIGS.flatMap((config) => {
+    const relatedIdentifiers = payload[config.fieldName] ?? [];
 
-    if (!rawValue) {
-      return [];
-    }
+    return relatedIdentifiers.flatMap((relatedIdentifier) => {
+      const candidate = buildRelatedPageReferenceCandidate(
+        config.pageType,
+        relatedIdentifier,
+        config.normalizeIdentifier
+      );
 
-    const route = buildRouteFromRoutingSource(candidate.routingSource, rawValue);
-    const isPrimaryRoute =
-      route.pageType === primaryRoute.pageType && route.identifier === primaryRoute.identifier;
+      if (!candidate) {
+        return [];
+      }
 
-    return isPrimaryRoute ? [] : [route];
+      const isPrimaryPage =
+        candidate.pageType === primaryRoute.pageType && candidate.pageTitle === primaryRoute.pageTitle;
+
+      return isPrimaryPage ? [] : [candidate];
+    });
   });
 
-  return dedupeRelatedRoutes(candidateRoutes);
+  return dedupeRelatedPageReferenceCandidates(extractedCandidates);
 }
 
 export async function resolveRelatedPages(
   pageService: ConfluencePageService,
-  routes: DocumentationPageRoute[]
+  spaceId: string,
+  relatedPageReferences: RelatedPageReferenceCandidate[]
 ): Promise<ResolvedRelatedPage[]> {
   /**
-   * We deliberately reuse the same ensure/create flow as the primary routed page so related links remain reliable.
+   * Resolution is intentionally lightweight: at render time we look up each expected page title inside the current
+   * Confluence space and link only the pages that already exist.
    *
-   * That means a payload can introduce a sideways relationship before the target page has ever been synced directly,
-   * and the related section will still point at a stable page id immediately after the current run completes.
+   * We do not create missing related pages here because routing and page-creation behavior for the primary sync path is
+   * already stable and intentionally out of scope for this feature.
    */
   const resolvedPages = await Promise.all(
-    routes.map(async (route) => {
-      const ensuredPage = await pageService.ensureRoutePageExists(CONFLUENCE_TARGET_PAGE_ID, route);
+    relatedPageReferences.map(async (reference) => {
+      const existingPage = await pageService.findPageByTitleInSpace(reference.pageTitle, spaceId);
+
+      if (!existingPage) {
+        return undefined;
+      }
 
       return {
-        pageId: ensuredPage.page.id,
-        pageTitle: ensuredPage.page.title,
-        pageType: route.pageType,
-        identifier: route.identifier,
-        pageUrl: buildConfluencePageUrl(ensuredPage.page.id),
-        createdPage: ensuredPage.createdPage,
+        pageId: existingPage.id,
+        pageTitle: existingPage.title,
+        pageType: reference.pageType,
+        identifier: reference.identifier,
+        pageUrl: buildConfluencePageUrl(existingPage.id),
+        createdPage: false,
       } satisfies ResolvedRelatedPage;
     })
   );
 
-  return resolvedPages.sort((left, right) => left.pageTitle.localeCompare(right.pageTitle));
+  /**
+   * The second deduplication pass protects the rendered section in case Confluence returns the same page for multiple
+   * candidate titles or if upstream payload arrays duplicated entries that normalize to the same seeded title.
+   */
+  const uniqueResolvedPages = new Map<string, ResolvedRelatedPage>();
+
+  for (const resolvedPage of resolvedPages) {
+    if (!resolvedPage) {
+      continue;
+    }
+
+    const dedupeKey = resolvedPage.pageId || resolvedPage.pageTitle;
+
+    uniqueResolvedPages.set(dedupeKey, resolvedPage);
+  }
+
+  return [...uniqueResolvedPages.values()].sort((left, right) => left.pageTitle.localeCompare(right.pageTitle));
 }
 
 export function buildRelatedDocumentationSection(relatedPages: ResolvedRelatedPage[]): string {

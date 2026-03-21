@@ -133,6 +133,10 @@ export class ConfluencePageService {
     return this.ensurePageExists(fallbackPageId, route.pageTitle);
   }
 
+  async findPageByTitleInSpace(pageTitle: string, spaceId: string): Promise<ConfluencePageReadModel | undefined> {
+    return this.confluenceClient.findPageByTitleInSpace(pageTitle, spaceId);
+  }
+
   async loadIndexEntries(indexPage: ConfluencePageReadModel): Promise<LoadedIndexEntriesResult> {
     /**
      * New index pages read their structured state from a content property so the visible body can remain clean.

@@ -22,10 +22,10 @@ class DocumentationSyncService {
         const route = (0, documentationPageRouter_1.resolveRoute)(payload);
         const indexPageTitle = (0, documentationIndexing_1.getIndexPageTitle)(route.pageType);
         const relatedIndexPageType = (0, documentationIndexing_1.getRelatedIndexPageType)(route.pageType);
-        const relatedRoutes = (0, documentationRelationships_1.getRelatedRoutesFromPayload)(payload, route);
+        const relatedPageReferences = (0, documentationRelationships_1.extractRelatedPageReferencesFromPayload)(payload, route);
         const resolvedTarget = await this.confluencePageService.resolvePageTarget(constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageTitle);
         const ensuredIndexPage = await (0, documentationIndexing_1.ensureIndexPageExists)(this.confluencePageService, constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageType);
-        const relatedPages = await (0, documentationRelationships_1.resolveRelatedPages)(this.confluencePageService, relatedRoutes);
+        const relatedPages = await (0, documentationRelationships_1.resolveRelatedPages)(this.confluencePageService, resolvedTarget.page.spaceId, relatedPageReferences);
         const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
         const mergeResult = (0, confluenceEntryBuilder_1.mergeExistingContentWithNewUpdate)(existingContent, payload);
         const navigationSection = (0, documentationIndexing_1.buildNavigationSection)(route, ensuredIndexPage.page);
@@ -85,7 +85,7 @@ class DocumentationSyncService {
             indexPageTitle,
             relatedIndexPageType,
             indexUpdated,
-            relatedPagesConsidered: relatedRoutes.length,
+            relatedPagesConsidered: relatedPageReferences.length,
             relatedPagesLinked: relatedPages.length,
             relatedPageTitles: relatedPages.map((page) => page.pageTitle),
         });
@@ -109,7 +109,7 @@ class DocumentationSyncService {
             indexPageTitle,
             relatedIndexPageType,
             indexUpdated,
-            relatedPagesConsidered: relatedRoutes.length,
+            relatedPagesConsidered: relatedPageReferences.length,
             relatedPagesLinked: relatedPages.length,
             relatedPageTitles: relatedPages.map((page) => page.pageTitle),
         };

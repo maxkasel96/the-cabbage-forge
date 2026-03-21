@@ -34,6 +34,11 @@ export interface DocumentationWebhookPayload {
   integration?: string;
   release?: string;
   incidentId?: string;
+  relatedFeatures?: string[];
+  relatedSystems?: string[];
+  relatedIntegrations?: string[];
+  relatedReleases?: string[];
+  relatedIncidents?: string[];
   summary: string;
   message: string;
   timestamp: string;
@@ -47,6 +52,11 @@ export interface ValidatedDocumentationWebhookPayload {
   integration?: string;
   release?: string;
   incidentId?: string;
+  relatedFeatures?: string[];
+  relatedSystems?: string[];
+  relatedIntegrations?: string[];
+  relatedReleases?: string[];
+  relatedIncidents?: string[];
   summary: string;
   message: string;
   timestamp: string;

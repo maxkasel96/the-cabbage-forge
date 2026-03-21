@@ -81,6 +81,9 @@ class ConfluencePageService {
     async ensureRoutePageExists(fallbackPageId, route) {
         return this.ensurePageExists(fallbackPageId, route.pageTitle);
     }
+    async findPageByTitleInSpace(pageTitle, spaceId) {
+        return this.confluenceClient.findPageByTitleInSpace(pageTitle, spaceId);
+    }
     async loadIndexEntries(indexPage) {
         /**
          * New index pages read their structured state from a content property so the visible body can remain clean.

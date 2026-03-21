@@ -41,6 +41,34 @@ function optionalNonEmptyString(
   return value.trim();
 }
 
+function optionalNonEmptyStringArray(
+  value: unknown,
+  fieldName: keyof DocumentationWebhookPayload
+): string[] | undefined {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new AppError('BAD_REQUEST', `${fieldName} must be an array of non-empty strings when provided.`, 400, {
+      field: fieldName,
+    });
+  }
+
+  const normalizedItems = value.map((item, index) => {
+    if (typeof item !== 'string' || !item.trim()) {
+      throw new AppError('BAD_REQUEST', `${fieldName} must contain only non-empty strings.`, 400, {
+        field: fieldName,
+        itemIndex: index,
+      });
+    }
+
+    return item.trim();
+  });
+
+  return normalizedItems.length > 0 ? normalizedItems : undefined;
+}
+
 function requireSupportedSource(value: string): SupportedSource {
   if (!SUPPORTED_SOURCES.includes(value as SupportedSource)) {
     throw new AppError('BAD_REQUEST', 'source is not supported.', 400, {
@@ -101,6 +129,11 @@ export function validateDocumentationWebhookPayload(
     integration: optionalNonEmptyString(payload.integration, 'integration'),
     release: optionalNonEmptyString(payload.release, 'release'),
     incidentId: optionalNonEmptyString(payload.incidentId, 'incidentId'),
+    relatedFeatures: optionalNonEmptyStringArray(payload.relatedFeatures, 'relatedFeatures'),
+    relatedSystems: optionalNonEmptyStringArray(payload.relatedSystems, 'relatedSystems'),
+    relatedIntegrations: optionalNonEmptyStringArray(payload.relatedIntegrations, 'relatedIntegrations'),
+    relatedReleases: optionalNonEmptyStringArray(payload.relatedReleases, 'relatedReleases'),
+    relatedIncidents: optionalNonEmptyStringArray(payload.relatedIncidents, 'relatedIncidents'),
     summary: requireNonEmptyString(payload.summary, 'summary'),
     message: requireNonEmptyString(payload.message, 'message'),
     timestamp: requireIsoTimestamp(requireNonEmptyString(payload.timestamp, 'timestamp')),
