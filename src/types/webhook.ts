@@ -60,6 +60,15 @@ export interface DocumentationPageRoute {
   routingSource: DocumentationRoutingSource;
 }
 
+export interface ResolvedRelatedPage {
+  pageId: string;
+  pageTitle: string;
+  pageType: DocumentationPageType;
+  identifier: string;
+  pageUrl: string;
+  createdPage: boolean;
+}
+
 export interface DocumentationIndexEntry {
   pageId: string;
   pageTitle: string;
@@ -115,4 +124,7 @@ export interface DocumentationSyncResult {
   indexPageTitle: string;
   relatedIndexPageType: DocumentationIndexPageType;
   indexUpdated: boolean;
+  relatedPagesConsidered: number;
+  relatedPagesLinked: number;
+  relatedPageTitles: string[];
 }

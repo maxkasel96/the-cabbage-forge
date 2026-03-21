@@ -5,6 +5,7 @@ const confluenceIndexBuilder_1 = require("../builders/confluenceIndexBuilder");
 const confluenceEntryBuilder_1 = require("../builders/confluenceEntryBuilder");
 const constants_1 = require("../config/constants");
 const documentationIndexing_1 = require("../helpers/documentationIndexing");
+const documentationRelationships_1 = require("../helpers/documentationRelationships");
 const documentationPageRouter_1 = require("../routing/documentationPageRouter");
 const confluencePageService_1 = require("./confluencePageService");
 class DocumentationSyncService {
@@ -21,12 +22,15 @@ class DocumentationSyncService {
         const route = (0, documentationPageRouter_1.resolveRoute)(payload);
         const indexPageTitle = (0, documentationIndexing_1.getIndexPageTitle)(route.pageType);
         const relatedIndexPageType = (0, documentationIndexing_1.getRelatedIndexPageType)(route.pageType);
+        const relatedRoutes = (0, documentationRelationships_1.getRelatedRoutesFromPayload)(payload, route);
         const resolvedTarget = await this.confluencePageService.resolvePageTarget(constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageTitle);
         const ensuredIndexPage = await (0, documentationIndexing_1.ensureIndexPageExists)(this.confluencePageService, constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageType);
+        const relatedPages = await (0, documentationRelationships_1.resolveRelatedPages)(this.confluencePageService, relatedRoutes);
         const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
         const mergeResult = (0, confluenceEntryBuilder_1.mergeExistingContentWithNewUpdate)(existingContent, payload);
         const navigationSection = (0, documentationIndexing_1.buildNavigationSection)(route, ensuredIndexPage.page);
-        const renderedPage = (0, confluenceEntryBuilder_1.renderDocumentationPage)(payload, route, mergeResult.historyEntries, navigationSection);
+        const relatedDocumentationSection = (0, documentationRelationships_1.buildRelatedDocumentationSection)(relatedPages);
+        const renderedPage = (0, confluenceEntryBuilder_1.renderDocumentationPage)(payload, route, mergeResult.historyEntries, navigationSection, relatedDocumentationSection);
         const updateResult = await this.confluencePageService.updatePageBody(resolvedTarget.page.id, resolvedTarget.page.spaceId, renderedPage, {
             pageInitialized: mergeResult.pageInitialized,
             structuredContentUpdated: mergeResult.structuredContentUpdated,
@@ -81,6 +85,9 @@ class DocumentationSyncService {
             indexPageTitle,
             relatedIndexPageType,
             indexUpdated,
+            relatedPagesConsidered: relatedRoutes.length,
+            relatedPagesLinked: relatedPages.length,
+            relatedPageTitles: relatedPages.map((page) => page.pageTitle),
         });
         return {
             pageId: updateResult.updatedPage.id,
@@ -102,6 +109,9 @@ class DocumentationSyncService {
             indexPageTitle,
             relatedIndexPageType,
             indexUpdated,
+            relatedPagesConsidered: relatedRoutes.length,
+            relatedPagesLinked: relatedPages.length,
+            relatedPageTitles: relatedPages.map((page) => page.pageTitle),
         };
     }
 }

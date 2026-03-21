@@ -17,6 +17,11 @@ import {
   getRelatedIndexPageType,
   updateIndexPage,
 } from '../helpers/documentationIndexing';
+import {
+  buildRelatedDocumentationSection,
+  getRelatedRoutesFromPayload,
+  resolveRelatedPages,
+} from '../helpers/documentationRelationships';
 import { resolveRoute } from '../routing/documentationPageRouter';
 import type { DocumentationSyncResult, ValidatedDocumentationWebhookPayload } from '../types/webhook';
 import { ConfluencePageService } from './confluencePageService';
@@ -39,6 +44,7 @@ export class DocumentationSyncService {
     const route = resolveRoute(payload);
     const indexPageTitle = getIndexPageTitle(route.pageType);
     const relatedIndexPageType = getRelatedIndexPageType(route.pageType);
+    const relatedRoutes = getRelatedRoutesFromPayload(payload, route);
 
     const resolvedTarget = await this.confluencePageService.resolvePageTarget(
       CONFLUENCE_TARGET_PAGE_ID,
@@ -49,14 +55,17 @@ export class DocumentationSyncService {
       CONFLUENCE_TARGET_PAGE_ID,
       route.pageType
     );
+    const relatedPages = await resolveRelatedPages(this.confluencePageService, relatedRoutes);
     const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
     const mergeResult = mergeExistingContentWithNewUpdate(existingContent, payload);
     const navigationSection = buildNavigationSection(route, ensuredIndexPage.page);
+    const relatedDocumentationSection = buildRelatedDocumentationSection(relatedPages);
     const renderedPage = renderDocumentationPage(
       payload,
       route,
       mergeResult.historyEntries,
-      navigationSection
+      navigationSection,
+      relatedDocumentationSection
     );
     const updateResult = await this.confluencePageService.updatePageBody(
       resolvedTarget.page.id,
@@ -133,6 +142,9 @@ export class DocumentationSyncService {
       indexPageTitle,
       relatedIndexPageType,
       indexUpdated,
+      relatedPagesConsidered: relatedRoutes.length,
+      relatedPagesLinked: relatedPages.length,
+      relatedPageTitles: relatedPages.map((page) => page.pageTitle),
     });
 
     return {
@@ -155,6 +167,9 @@ export class DocumentationSyncService {
       indexPageTitle,
       relatedIndexPageType,
       indexUpdated,
+      relatedPagesConsidered: relatedRoutes.length,
+      relatedPagesLinked: relatedPages.length,
+      relatedPageTitles: relatedPages.map((page) => page.pageTitle),
     };
   }
 }

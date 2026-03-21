@@ -8,7 +8,7 @@ import type {
   ConfluencePageUpdateResponse,
   EnsureConfluencePageResult,
 } from '../types/confluence';
-import type { DocumentationIndexEntry } from '../types/webhook';
+import type { DocumentationIndexEntry, DocumentationPageRoute } from '../types/webhook';
 
 export interface UpdateStructuredPageResult {
   previousPage: ConfluencePageReadModel;
@@ -124,6 +124,13 @@ export class ConfluencePageService {
       usedFallbackPage: false,
       createdPage: resolvedPage.createdPage,
     };
+  }
+
+  async ensureRoutePageExists(
+    fallbackPageId: string,
+    route: Pick<DocumentationPageRoute, 'pageTitle'>
+  ): Promise<EnsureConfluencePageResult> {
+    return this.ensurePageExists(fallbackPageId, route.pageTitle);
   }
 
   async loadIndexEntries(indexPage: ConfluencePageReadModel): Promise<LoadedIndexEntriesResult> {

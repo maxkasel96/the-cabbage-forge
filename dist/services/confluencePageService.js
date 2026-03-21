@@ -78,6 +78,9 @@ class ConfluencePageService {
             createdPage: resolvedPage.createdPage,
         };
     }
+    async ensureRoutePageExists(fallbackPageId, route) {
+        return this.ensurePageExists(fallbackPageId, route.pageTitle);
+    }
     async loadIndexEntries(indexPage) {
         /**
          * New index pages read their structured state from a content property so the visible body can remain clean.

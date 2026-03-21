@@ -1,5 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.normalizeReadableIdentifier = normalizeReadableIdentifier;
+exports.normalizeLiteralIdentifier = normalizeLiteralIdentifier;
+exports.buildRouteFromRoutingSource = buildRouteFromRoutingSource;
 exports.resolveRoute = resolveRoute;
 exports.buildPageTitle = buildPageTitle;
 const appError_1 = require("../errors/appError");
@@ -29,6 +32,50 @@ function buildRouteFromCandidate(candidate) {
         routingSource: candidate.routingSource,
         pageTitle: buildPageTitle(candidate),
     };
+}
+function buildRouteFromRoutingSource(routingSource, rawIdentifier) {
+    switch (routingSource) {
+        case 'feature':
+            return buildRouteFromCandidate({
+                pageType: 'feature-page',
+                identifier: normalizeReadableIdentifier(rawIdentifier),
+                routingSource,
+            });
+        case 'system':
+            return buildRouteFromCandidate({
+                pageType: 'system-page',
+                identifier: normalizeReadableIdentifier(rawIdentifier),
+                routingSource,
+            });
+        case 'integration':
+            return buildRouteFromCandidate({
+                pageType: 'integration-page',
+                identifier: normalizeReadableIdentifier(rawIdentifier),
+                routingSource,
+            });
+        case 'release':
+            return buildRouteFromCandidate({
+                pageType: 'release-page',
+                identifier: normalizeLiteralIdentifier(rawIdentifier),
+                routingSource,
+            });
+        case 'incidentId':
+            return buildRouteFromCandidate({
+                pageType: 'incident-page',
+                identifier: normalizeLiteralIdentifier(rawIdentifier),
+                routingSource,
+            });
+        case 'timestamp':
+            return buildRouteFromCandidate({
+                pageType: 'release-page',
+                identifier: normalizeLiteralIdentifier(rawIdentifier),
+                routingSource,
+            });
+        default:
+            throw new appError_1.AppError('BAD_REQUEST', 'Unsupported routing source for documentation page route.', 400, {
+                routingSource,
+            });
+    }
 }
 function toRoutePrefix(pageType) {
     switch (pageType) {
