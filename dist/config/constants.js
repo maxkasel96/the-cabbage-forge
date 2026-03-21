@@ -12,7 +12,13 @@ exports.CONFLUENCE_TARGET_SPACE_KEY = 'TC';
 exports.CONFLUENCE_TARGET_PAGE_ID = '21692417';
 exports.CONFLUENCE_FALLBACK_PAGE_TITLE = 'Docs Sync Test Page';
 exports.SUPPORTED_SOURCES = ['nextjs-app'];
-exports.SUPPORTED_EVENT_TYPES = ['feature-update'];
+exports.SUPPORTED_EVENT_TYPES = [
+    'feature-update',
+    'system-update',
+    'integration-update',
+    'release',
+    'incident',
+];
 exports.WEBHOOK_SUCCESS_MESSAGE = 'Documentation sync completed successfully.';
 exports.DEFAULT_JSON_HEADERS = {
     'Content-Type': ['application/json'],

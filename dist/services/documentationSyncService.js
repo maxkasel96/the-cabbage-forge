@@ -17,20 +17,30 @@ class DocumentationSyncService {
          * response contract for the caller. This gives us a clean place to add richer workflows later without bloating the
          * HTTP handler.
          */
-        const route = (0, documentationPageRouter_1.routeDocumentationPage)(payload);
+        const route = (0, documentationPageRouter_1.resolveRoute)(payload);
         const resolvedTarget = await this.confluencePageService.resolvePageTarget(constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageTitle);
         const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
         const mergeResult = (0, confluenceEntryBuilder_1.mergeExistingContentWithNewUpdate)(existingContent, payload);
-        const renderedPage = (0, confluenceEntryBuilder_1.renderFeaturePage)(payload, mergeResult.historyEntries);
+        const renderedPage = (0, confluenceEntryBuilder_1.renderDocumentationPage)(payload, route, mergeResult.historyEntries);
         const updateResult = await this.confluencePageService.updatePageBody(resolvedTarget.page.id, resolvedTarget.page.spaceId, renderedPage, {
             pageInitialized: mergeResult.pageInitialized,
             structuredContentUpdated: mergeResult.structuredContentUpdated,
             historyEntryCount: mergeResult.historyEntries.length,
             usedLegacyMigrationEntry: mergeResult.usedLegacyMigrationEntry,
         });
+        console.info('[DocumentationSync] Documentation route resolved', {
+            pageType: route.pageType,
+            pageTitle: route.pageTitle,
+            routingSource: route.routingSource,
+            identifier: route.identifier,
+            eventType: payload.eventType,
+        });
         return {
             pageId: updateResult.updatedPage.id,
             title: updateResult.updatedPage.title,
+            pageTitle: route.pageTitle,
+            pageType: route.pageType,
+            routingSource: route.routingSource,
             spaceId: updateResult.updatedPage.spaceId,
             spaceKey: constants_1.CONFLUENCE_TARGET_SPACE_KEY,
             previousVersion: updateResult.previousPage.version.number,

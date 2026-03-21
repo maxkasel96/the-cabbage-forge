@@ -1,4 +1,4 @@
-import type { ValidatedDocumentationWebhookPayload } from '../types/webhook';
+import type { DocumentationPageRoute, ValidatedDocumentationWebhookPayload } from '../types/webhook';
 
 const PAGE_LAYOUT_MARKER = 'DOC_SYNC_LAYOUT_V1';
 const HISTORY_START_MARKER = '<!-- DOC_SYNC_HISTORY_START -->';
@@ -31,7 +31,33 @@ function renderParagraphs(value: string): string {
     .join('\n');
 }
 
-export function renderMetadataBlock(payload: ValidatedDocumentationWebhookPayload): string {
+function renderOptionalMetadataRow(label: string, value?: string): string {
+  if (!value) {
+    return '';
+  }
+
+  return `
+    <tr>
+      <th><p>${escapeStorageValue(label)}</p></th>
+      <td><p>${escapeStorageValue(value)}</p></td>
+    </tr>
+  `.trim();
+}
+
+export function renderMetadataBlock(
+  payload: ValidatedDocumentationWebhookPayload,
+  route: DocumentationPageRoute
+): string {
+  const optionalRows = [
+    renderOptionalMetadataRow('Feature', payload.feature),
+    renderOptionalMetadataRow('System', payload.system),
+    renderOptionalMetadataRow('Integration', payload.integration),
+    renderOptionalMetadataRow('Release', payload.release),
+    renderOptionalMetadataRow('Incident ID', payload.incidentId),
+  ]
+    .filter((row) => row.length > 0)
+    .join('\n');
+
   return `
 <table data-layout="default">
   <tbody>
@@ -48,10 +74,14 @@ export function renderMetadataBlock(payload: ValidatedDocumentationWebhookPayloa
       <td><p>${escapeStorageValue(payload.timestamp)}</p></td>
     </tr>
     <tr>
-      <th><p>Feature</p></th>
-      <td><p>${escapeStorageValue(payload.feature)}</p></td>
+      <th><p>Page Type</p></th>
+      <td><p>${escapeStorageValue(route.pageType)}</p></td>
     </tr>
-  </tbody>
+    <tr>
+      <th><p>Routing Source</p></th>
+      <td><p>${escapeStorageValue(route.routingSource)}</p></td>
+    </tr>
+${optionalRows ? `${optionalRows}\n` : ''}  </tbody>
 </table>
   `.trim();
 }
@@ -132,19 +162,24 @@ export function mergeExistingContentWithNewUpdate(
   };
 }
 
-export function renderFeaturePage(
+/**
+ * The renderer intentionally stays generic: every page type gets the same structured sections today, while the route
+ * object gives us a clean hook for small page-type-specific tweaks later if we ever need them.
+ */
+export function renderDocumentationPage(
   payload: ValidatedDocumentationWebhookPayload,
+  route: DocumentationPageRoute,
   historyEntries: string[]
 ): string {
   return `
 <!-- ${PAGE_LAYOUT_MARKER} -->
-<h1>${escapeStorageValue(payload.feature)}</h1>
+<h1>${escapeStorageValue(route.pageHeading)}</h1>
 <h2>Summary</h2>
 ${renderParagraphs(payload.summary)}
 <h2>Latest Update</h2>
 ${renderParagraphs(payload.message)}
 <h2>Metadata</h2>
-${renderMetadataBlock(payload)}
+${renderMetadataBlock(payload, route)}
 <h2>Change History</h2>
 ${HISTORY_START_MARKER}
 ${historyEntries.join('\n')}

@@ -30,7 +30,6 @@ export async function documentationWebhookHandler(
     const validatedPayload = validateDocumentationWebhookPayload(parsedPayload);
 
     // TODO: Persist and check an idempotency key so retried webhook deliveries do not create duplicate page entries.
-    // TODO: Route multiple event types to specialized builders once the webhook contract expands beyond feature updates.
     // Page routing now lives in a dedicated helper so the handler stays focused on request parsing and payload validation.
     const syncResult = await documentationSyncService.syncDocumentation(validatedPayload);
 
