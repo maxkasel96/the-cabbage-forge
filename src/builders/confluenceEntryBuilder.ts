@@ -1,9 +1,13 @@
 import type { ValidatedDocumentationWebhookPayload } from '../types/webhook';
 
+const PAGE_LAYOUT_MARKER = 'DOC_SYNC_LAYOUT_V1';
+const HISTORY_START_MARKER = '<!-- DOC_SYNC_HISTORY_START -->';
+const HISTORY_END_MARKER = '<!-- DOC_SYNC_HISTORY_END -->';
+
 /**
  * Confluence storage format is XML-like markup, so every user-controlled string needs to be escaped before it is
- * interpolated into the table or macro body. Keeping the escaping logic local to the builder reduces the chance of a
- * future refactor forgetting to sanitize one field.
+ * interpolated into the page body. Keeping the escaping logic local to this renderer reduces the chance of a future
+ * refactor forgetting to sanitize one field when more sections are added.
  */
 function escapeStorageValue(value: string): string {
   return value
@@ -14,47 +18,136 @@ function escapeStorageValue(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function buildConfluenceDocumentationEntry(
-  payload: ValidatedDocumentationWebhookPayload
-): string {
-  const rawPayloadJson = escapeStorageValue(JSON.stringify(payload, null, 2));
+/**
+ * The webhook payload can contain line breaks, especially inside summaries or human-authored update messages.
+ * Rendering each line as its own paragraph keeps the Confluence page readable without having to introduce a more
+ * fragile HTML parser or allow arbitrary inbound markup.
+ */
+function renderParagraphs(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => `<p>${escapeStorageValue(line)}</p>`)
+    .join('\n');
+}
 
+export function renderMetadataBlock(payload: ValidatedDocumentationWebhookPayload): string {
   return `
-<hr />
-<h2>Documentation Update</h2>
 <table data-layout="default">
   <tbody>
-    <tr>
-      <th><p>Event Type</p></th>
-      <td><p>${escapeStorageValue(payload.eventType)}</p></td>
-    </tr>
     <tr>
       <th><p>Source</p></th>
       <td><p>${escapeStorageValue(payload.source)}</p></td>
     </tr>
     <tr>
-      <th><p>Feature</p></th>
-      <td><p>${escapeStorageValue(payload.feature)}</p></td>
-    </tr>
-    <tr>
-      <th><p>Summary</p></th>
-      <td><p>${escapeStorageValue(payload.summary)}</p></td>
-    </tr>
-    <tr>
-      <th><p>Message</p></th>
-      <td><p>${escapeStorageValue(payload.message)}</p></td>
+      <th><p>Event Type</p></th>
+      <td><p>${escapeStorageValue(payload.eventType)}</p></td>
     </tr>
     <tr>
       <th><p>Timestamp</p></th>
       <td><p>${escapeStorageValue(payload.timestamp)}</p></td>
     </tr>
+    <tr>
+      <th><p>Feature</p></th>
+      <td><p>${escapeStorageValue(payload.feature)}</p></td>
+    </tr>
   </tbody>
 </table>
+  `.trim();
+}
+
+export function renderHistoryEntry(payload: ValidatedDocumentationWebhookPayload): string {
+  return `
 <ac:structured-macro ac:name="expand">
-  <ac:parameter ac:name="title">Validated payload</ac:parameter>
+  <ac:parameter ac:name="title">${escapeStorageValue(payload.timestamp)} — ${escapeStorageValue(payload.eventType)}</ac:parameter>
   <ac:rich-text-body>
-    <pre>${rawPayloadJson}</pre>
+    <p><strong>Timestamp:</strong> ${escapeStorageValue(payload.timestamp)}</p>
+    <p><strong>Event Type:</strong> ${escapeStorageValue(payload.eventType)}</p>
+    <p><strong>Message:</strong> ${escapeStorageValue(payload.message)}</p>
   </ac:rich-text-body>
 </ac:structured-macro>
-`.trim();
+  `.trim();
+}
+
+function renderLegacyHistoryEntry(existingContent: string): string {
+  return `
+<ac:structured-macro ac:name="expand">
+  <ac:parameter ac:name="title">Legacy content preserved during structured page migration</ac:parameter>
+  <ac:rich-text-body>
+    <p>This page previously contained unstructured content. The earlier body is preserved below for reference.</p>
+    <ac:structured-macro ac:name="code">
+      <ac:parameter ac:name="language">html/xml</ac:parameter>
+      <ac:plain-text-body><![CDATA[${existingContent.trim()}]]></ac:plain-text-body>
+    </ac:structured-macro>
+  </ac:rich-text-body>
+</ac:structured-macro>
+  `.trim();
+}
+
+function extractHistoryEntries(existingContent: string): string[] {
+  const historySectionMatch = existingContent.match(
+    /<!-- DOC_SYNC_HISTORY_START -->([\s\S]*?)<!-- DOC_SYNC_HISTORY_END -->/
+  );
+
+  if (!historySectionMatch) {
+    return [];
+  }
+
+  return historySectionMatch[1]
+    .split(/(?=<ac:structured-macro ac:name="expand">)/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+export function mergeExistingContentWithNewUpdate(
+  existingContent: string,
+  payload: ValidatedDocumentationWebhookPayload
+): {
+  historyEntries: string[];
+  pageInitialized: boolean;
+  structuredContentUpdated: boolean;
+  usedLegacyMigrationEntry: boolean;
+} {
+  const trimmedExistingContent = existingContent.trim();
+  const hasStructuredLayout = trimmedExistingContent.includes(PAGE_LAYOUT_MARKER);
+  const existingHistoryEntries = hasStructuredLayout ? extractHistoryEntries(trimmedExistingContent) : [];
+  const historyEntries = [renderHistoryEntry(payload), ...existingHistoryEntries];
+  let usedLegacyMigrationEntry = false;
+
+  /**
+   * If the page already exists but predates the structured renderer, we do not attempt to reverse-engineer arbitrary
+   * storage HTML into semantic sections. That kind of parser would be brittle and easy to break. Instead, we migrate the
+   * page to the new predictable layout and preserve the legacy body as a single history artifact.
+   */
+  if (!hasStructuredLayout && trimmedExistingContent.length > 0) {
+    historyEntries.push(renderLegacyHistoryEntry(trimmedExistingContent));
+    usedLegacyMigrationEntry = true;
+  }
+
+  return {
+    historyEntries,
+    pageInitialized: !hasStructuredLayout,
+    structuredContentUpdated: hasStructuredLayout,
+    usedLegacyMigrationEntry,
+  };
+}
+
+export function renderFeaturePage(
+  payload: ValidatedDocumentationWebhookPayload,
+  historyEntries: string[]
+): string {
+  return `
+<!-- ${PAGE_LAYOUT_MARKER} -->
+<h1>${escapeStorageValue(payload.feature)}</h1>
+<h2>Summary</h2>
+${renderParagraphs(payload.summary)}
+<h2>Latest Update</h2>
+${renderParagraphs(payload.message)}
+<h2>Metadata</h2>
+${renderMetadataBlock(payload)}
+<h2>Change History</h2>
+${HISTORY_START_MARKER}
+${historyEntries.join('\n')}
+${HISTORY_END_MARKER}
+  `.trim();
 }
