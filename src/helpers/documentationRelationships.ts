@@ -157,7 +157,7 @@ export async function resolveRelatedPages(
         identifier: reference.identifier,
         pageUrl: buildConfluencePageUrl(existingPage.id),
         createdPage: false,
-      } satisfies ResolvedRelatedPage;
+      } as ResolvedRelatedPage;
     })
   );
 
