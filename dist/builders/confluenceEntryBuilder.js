@@ -118,11 +118,12 @@ function mergeExistingContentWithNewUpdate(existingContent, payload) {
  * The renderer intentionally stays generic: every page type gets the same structured sections today, while the route
  * object gives us a clean hook for small page-type-specific tweaks later if we ever need them.
  */
-function renderDocumentationPage(payload, route, historyEntries, navigationSection) {
+function renderDocumentationPage(payload, route, historyEntries, navigationSection, relatedDocumentationSection = '') {
     return `
 <!-- ${PAGE_LAYOUT_MARKER} -->
 <h1>${(0, confluenceStorage_1.escapeStorageValue)(route.pageHeading)}</h1>
 ${navigationSection}
+${relatedDocumentationSection ? `${relatedDocumentationSection}\n` : ''}
 <h2>Summary</h2>
 ${(0, confluenceStorage_1.renderParagraphs)(payload.summary)}
 <h2>Latest Update</h2>

@@ -144,12 +144,14 @@ export function renderDocumentationPage(
   payload: ValidatedDocumentationWebhookPayload,
   route: DocumentationPageRoute,
   historyEntries: string[],
-  navigationSection: string
+  navigationSection: string,
+  relatedDocumentationSection = ''
 ): string {
   return `
 <!-- ${PAGE_LAYOUT_MARKER} -->
 <h1>${escapeStorageValue(route.pageHeading)}</h1>
 ${navigationSection}
+${relatedDocumentationSection ? `${relatedDocumentationSection}\n` : ''}
 <h2>Summary</h2>
 ${renderParagraphs(payload.summary)}
 <h2>Latest Update</h2>

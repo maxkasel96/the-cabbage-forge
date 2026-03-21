@@ -67,8 +67,7 @@ export function buildNavigationSection(route: DocumentationPageRoute, indexPage:
   return `
 <h2>Navigation</h2>
 <ul>
-  <li><p><a href="${buildConfluencePageUrl(indexPage.id)}">Back to ${indexPageTitle}</a></p></li>
-  <li><p>Related page links can be added here as the documentation taxonomy expands.</p></li>
+  <li><p><a href="${buildConfluencePageUrl(indexPage.id)}">${indexPageTitle}</a></p></li>
 </ul>
   `.trim();
 }
