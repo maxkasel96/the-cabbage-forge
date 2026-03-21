@@ -84,6 +84,44 @@ class ConfluenceClient {
         const parsedResponse = await parseJsonResponse(response, 'find page by title');
         return parsedResponse.results[0];
     }
+    async getPageProperty(pageId, propertyKey) {
+        /**
+         * Confluence exposes content properties as a separate collection from the visible page body.
+         *
+         * Reading that collection lets us keep structured index-entry state without leaking raw serialized payloads into the
+         * rendered page that end users see.
+         */
+        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages/${pageId}/properties?key=${propertyKey}&limit=1`, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+        const parsedResponse = await parseJsonResponse(response, 'get page property');
+        return parsedResponse.results[0];
+    }
+    async createPageProperty(pageId, payload) {
+        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages/${pageId}/properties`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        return parseJsonResponse(response, 'create page property');
+    }
+    async updatePageProperty(pageId, propertyId, payload) {
+        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages/${pageId}/properties/${propertyId}`, {
+            method: 'PUT',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        return parseJsonResponse(response, 'update page property');
+    }
     async createPage(payload) {
         const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages`, {
             method: 'POST',

@@ -54,6 +54,33 @@ export interface ConfluencePageListResponse {
   results: ConfluencePageReadModel[];
 }
 
+export interface ConfluenceContentPropertyVersion {
+  number: number;
+  message?: string;
+}
+
+export interface ConfluenceContentProperty<TValue> {
+  id: string;
+  key: string;
+  version: ConfluenceContentPropertyVersion;
+  value: TValue;
+}
+
+export interface ConfluenceContentPropertyListResponse<TValue> {
+  results: ConfluenceContentProperty<TValue>[];
+}
+
+export interface ConfluenceContentPropertyCreateRequest<TValue> {
+  key: string;
+  value: TValue;
+}
+
+export interface ConfluenceContentPropertyUpdateRequest<TValue> {
+  key: string;
+  value: TValue;
+  version: ConfluenceContentPropertyVersion;
+}
+
 export interface EnsureConfluencePageResult {
   page: ConfluencePageReadModel;
   createdPage: boolean;

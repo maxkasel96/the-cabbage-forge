@@ -2,9 +2,11 @@ import { AppError } from '../errors/appError';
 import type { DocumentationIndexEntry, DocumentationIndexPageType } from '../types/webhook';
 import { escapeStorageValue, renderParagraphs } from './confluenceStorage';
 
-const INDEX_LAYOUT_MARKER = 'DOC_SYNC_INDEX_LAYOUT_V1';
+const INDEX_LAYOUT_MARKER = 'DOC_SYNC_INDEX_LAYOUT_V2';
+const LEGACY_INDEX_LAYOUT_MARKER = 'DOC_SYNC_INDEX_LAYOUT_V1';
 const INDEX_DATA_START_MARKER = '<!-- DOC_SYNC_INDEX_DATA_START -->';
 const INDEX_DATA_END_MARKER = '<!-- DOC_SYNC_INDEX_DATA_END -->';
+export const INDEX_ENTRIES_PAGE_PROPERTY_KEY = 'doc-sync-index-entries';
 
 function getIndexOverview(indexPageType: DocumentationIndexPageType): string {
   switch (indexPageType) {
@@ -23,10 +25,6 @@ function getIndexOverview(indexPageType: DocumentationIndexPageType): string {
   }
 }
 
-function encodeIndexEntries(entries: DocumentationIndexEntry[]): string {
-  return encodeURIComponent(JSON.stringify(entries));
-}
-
 function decodeIndexEntries(encodedEntries: string): DocumentationIndexEntry[] {
   try {
     return JSON.parse(decodeURIComponent(encodedEntries)) as DocumentationIndexEntry[];
@@ -37,33 +35,43 @@ function decodeIndexEntries(encodedEntries: string): DocumentationIndexEntry[] {
   }
 }
 
-function renderIndexRows(entries: DocumentationIndexEntry[]): string {
-  if (entries.length === 0) {
-    return `
-      <tr>
-        <td colspan="4"><p>No routed pages have been synced into this index yet.</p></td>
-      </tr>
-    `.trim();
-  }
+function sortIndexEntries(entries: DocumentationIndexEntry[]): DocumentationIndexEntry[] {
+  /**
+   * Index pages should always render in a stable alphabetical order so repeated syncs do not reshuffle identical data.
+   *
+   * We sort by title first because that is what users read, and we use page id as a final tie-breaker to avoid any
+   * locale or duplicate-title ambiguity from producing non-deterministic output between runs.
+   */
+  return [...entries].sort((left, right) => {
+    const titleComparison = left.pageTitle.localeCompare(right.pageTitle);
 
-  return entries
-    .map(
-      (entry) => `
-        <tr>
-          <td><p><a href="${escapeStorageValue(entry.pageUrl)}">${escapeStorageValue(entry.pageTitle)}</a></p></td>
-          <td><p>${entry.lastUpdated ? escapeStorageValue(entry.lastUpdated) : '—'}</p></td>
-          <td><p>${entry.identifier ? escapeStorageValue(entry.identifier) : '—'}</p></td>
-          <td><p>${escapeStorageValue(entry.pageId)}</p></td>
-        </tr>
-      `.trim()
-    )
-    .join('\n');
+    if (titleComparison !== 0) {
+      return titleComparison;
+    }
+
+    return left.pageId.localeCompare(right.pageId);
+  });
 }
 
-export function extractIndexEntries(existingContent: string): DocumentationIndexEntry[] {
+function renderIndexLinkList(entries: DocumentationIndexEntry[]): string {
+  if (entries.length === 0) {
+    return '<p>No routed pages have been synced into this index yet.</p>';
+  }
+
+  return [
+    '<ul>',
+    ...entries.map(
+      (entry) =>
+        `  <li><p><a href="${escapeStorageValue(entry.pageUrl)}">${escapeStorageValue(entry.pageTitle)}</a></p></li>`
+    ),
+    '</ul>',
+  ].join('\n');
+}
+
+export function extractIndexEntriesFromLegacyContent(existingContent: string): DocumentationIndexEntry[] {
   const trimmedExistingContent = existingContent.trim();
 
-  if (!trimmedExistingContent.includes(INDEX_LAYOUT_MARKER)) {
+  if (!trimmedExistingContent.includes(LEGACY_INDEX_LAYOUT_MARKER)) {
     return [];
   }
 
@@ -72,56 +80,35 @@ export function extractIndexEntries(existingContent: string): DocumentationIndex
   );
 
   if (!dataMatch) {
-    throw new AppError('UPSTREAM_ERROR', 'Index page is missing its structured data block.', 502, {
+    throw new AppError('UPSTREAM_ERROR', 'Legacy index page is missing its structured data block.', 502, {
       marker: INDEX_DATA_START_MARKER,
     });
   }
 
-  return decodeIndexEntries(dataMatch[1].trim());
+  return sortIndexEntries(decodeIndexEntries(dataMatch[1].trim()));
+}
+
+export function renderIndexPageContent(entries: DocumentationIndexEntry[]): string {
+  return renderIndexLinkList(sortIndexEntries(entries));
 }
 
 export function renderIndexPage(options: {
   indexPageTitle: string;
   indexPageType: DocumentationIndexPageType;
   entries: DocumentationIndexEntry[];
-  generatedAt: string;
 }): string {
+  /**
+   * The visible page body intentionally contains only human-readable Confluence storage markup.
+   *
+   * Structured entry data now lives in a page property so the body can stay lightweight while still being fully
+   * regenerated from a deterministic source of truth during each sync.
+   */
   return `
 <!-- ${INDEX_LAYOUT_MARKER} -->
-${INDEX_DATA_START_MARKER}
-${encodeIndexEntries(options.entries)}
-${INDEX_DATA_END_MARKER}
 <h1>${escapeStorageValue(options.indexPageTitle)}</h1>
 <h2>Overview</h2>
 ${renderParagraphs(getIndexOverview(options.indexPageType))}
 <h2>Linked Pages</h2>
-<table data-layout="default">
-  <tbody>
-    <tr>
-      <th><p>Page Title</p></th>
-      <th><p>Last Updated</p></th>
-      <th><p>Routing Identifier</p></th>
-      <th><p>Page ID</p></th>
-    </tr>
-${renderIndexRows(options.entries)}
-  </tbody>
-</table>
-<h2>Metadata</h2>
-<table data-layout="default">
-  <tbody>
-    <tr>
-      <th><p>Index Type</p></th>
-      <td><p>${escapeStorageValue(options.indexPageType)}</p></td>
-    </tr>
-    <tr>
-      <th><p>Entry Count</p></th>
-      <td><p>${String(options.entries.length)}</p></td>
-    </tr>
-    <tr>
-      <th><p>Last Generated</p></th>
-      <td><p>${escapeStorageValue(options.generatedAt)}</p></td>
-    </tr>
-  </tbody>
-</table>
+${renderIndexPageContent(options.entries)}
   `.trim();
 }
