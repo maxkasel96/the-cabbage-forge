@@ -77,6 +77,11 @@ export interface DocumentationWebhookPayload extends DocumentationRelationshipFi
    * migrate toward the structured contract.
    */
   data?: DocumentationStructuredDataPayload;
+  /**
+   * payload.content contains the fully rendered HTML produced upstream and is now the single source of truth for the
+   * Confluence page body.
+   */
+  content: string;
   summary: string;
   message: string;
   timestamp: string;
@@ -98,6 +103,7 @@ export interface ValidatedDocumentationWebhookPayload extends DocumentationRelat
   release?: string;
   incidentId?: string;
   data?: ValidatedDocumentationStructuredDataPayload;
+  content: string;
   summary: string;
   message: string;
   timestamp: string;

@@ -33,16 +33,12 @@ class DocumentationSyncService {
         });
         const ensuredIndexPage = await (0, documentationIndexing_1.ensureIndexPageExists)(this.confluencePageService, constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageType);
         const relatedPages = await (0, documentationRelationships_1.resolveRelatedPages)(this.confluencePageService, resolvedTarget.page.spaceId, relatedPageReferences);
-        const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
-        const mergeResult = (0, confluenceEntryBuilder_1.mergeExistingContentWithNewUpdate)(existingContent, payload);
-        const navigationSection = (0, documentationIndexing_1.buildNavigationSection)(route, ensuredIndexPage.page);
-        const relatedDocumentationSection = (0, documentationRelationships_1.buildRelatedDocumentationSection)(relatedPages);
-        const renderedPage = (0, confluenceEntryBuilder_1.renderDocumentationPage)(payload, route, mergeResult.historyEntries, navigationSection, relatedDocumentationSection);
-        const updateResult = await this.confluencePageService.updatePageBody(resolvedTarget.page.id, resolvedTarget.page.spaceId, renderedPage, {
-            pageInitialized: mergeResult.pageInitialized,
-            structuredContentUpdated: mergeResult.structuredContentUpdated,
-            historyEntryCount: mergeResult.historyEntries.length,
-            usedLegacyMigrationEntry: mergeResult.usedLegacyMigrationEntry,
+        const renderedPage = (0, confluenceEntryBuilder_1.renderDocumentationPage)(payload, route);
+        const updateResult = await this.confluencePageService.updatePageBody(resolvedTarget.page.id, resolvedTarget.page.spaceId, renderedPage.body, {
+            pageInitialized: resolvedTarget.createdPage,
+            structuredContentUpdated: !resolvedTarget.createdPage,
+            historyEntryCount: 0,
+            usedLegacyMigrationEntry: false,
         });
         const indexState = await this.confluencePageService.loadIndexEntries(ensuredIndexPage.page);
         const indexEntry = (0, documentationIndexing_1.buildIndexEntry)(route, updateResult.updatedPage, payload.timestamp);

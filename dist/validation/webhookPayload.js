@@ -285,6 +285,7 @@ function validateDocumentationWebhookPayload(payload) {
         relatedReleases: optionalNonEmptyStringArray(payload.relatedReleases, 'relatedReleases'),
         relatedIncidents: optionalNonEmptyStringArray(payload.relatedIncidents, 'relatedIncidents'),
         data: validateStructuredDataPayload(payload.data),
+        content: requireNonEmptyString(payload.content, 'content'),
         summary: requireNonEmptyString(payload.summary, 'summary'),
         message: requireNonEmptyString(payload.message, 'message'),
         timestamp: requireIsoTimestamp(requireNonEmptyString(payload.timestamp, 'timestamp')),
