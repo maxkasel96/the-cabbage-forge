@@ -57,7 +57,11 @@ class ConfluenceParentPageResolver {
                 });
                 return undefined;
             }
-            return configuredParentPage.id;
+            return {
+                parentPageId: configuredParentPage.id,
+                parentPageTitle: configuredParentPage.title,
+                parentResolutionSource: 'env',
+            };
         }
         catch (error) {
             console.warn('[DocumentationSync] Configured parent page could not be resolved. Falling back to title lookup.', {
@@ -86,7 +90,15 @@ class ConfluenceParentPageResolver {
                 matchedPageIds: exactMatches.map((page) => page.id),
             });
         }
-        return exactMatches[0]?.id;
+        const exactMatch = exactMatches[0];
+        if (!exactMatch) {
+            return undefined;
+        }
+        return {
+            parentPageId: exactMatch.id,
+            parentPageTitle: exactMatch.title,
+            parentResolutionSource: 'lookup',
+        };
     }
     async createContainerPageAtSpaceRoot(config, targetSpaceId) {
         /**
@@ -122,20 +134,24 @@ class ConfluenceParentPageResolver {
             pageType: config.pageType,
             propertyKey: CONTAINER_PAGE_PROPERTY_KEY,
         });
-        return createdPage.id;
+        return {
+            parentPageId: createdPage.id,
+            parentPageTitle: createdPage.title,
+            parentResolutionSource: 'created',
+        };
     }
     async resolveParentPageId(pageType, targetSpaceId) {
         const config = this.getParentPageConfig(pageType);
         if (!config) {
-            return undefined;
+            return {};
         }
-        const configuredParentPageId = await this.resolveConfiguredParentPage(config, targetSpaceId);
-        if (configuredParentPageId) {
-            return configuredParentPageId;
+        const configuredParentPage = await this.resolveConfiguredParentPage(config, targetSpaceId);
+        if (configuredParentPage) {
+            return configuredParentPage;
         }
-        const exactTitleParentPageId = await this.resolveParentPageByExactTitle(config, targetSpaceId);
-        if (exactTitleParentPageId) {
-            return exactTitleParentPageId;
+        const exactTitleParentPage = await this.resolveParentPageByExactTitle(config, targetSpaceId);
+        if (exactTitleParentPage) {
+            return exactTitleParentPage;
         }
         return this.createContainerPageAtSpaceRoot(config, targetSpaceId);
     }

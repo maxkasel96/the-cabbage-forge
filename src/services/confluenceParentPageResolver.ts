@@ -2,7 +2,7 @@ import { CONFLUENCE_TARGET_SPACE_KEY } from '../config/constants';
 import { AppError } from '../errors/appError';
 import type { ConfluenceClient } from '../clients/confluenceClient';
 import type { ConfluencePageReadModel } from '../types/confluence';
-import type { DocumentationPageType } from '../types/webhook';
+import type { DocumentationPageType, ParentResolutionSource } from '../types/webhook';
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -43,6 +43,13 @@ const ROUTED_PARENT_PAGE_CONFIG_BY_TYPE: Partial<Record<DocumentationPageType, R
   },
 };
 
+
+export interface ParentPageResolutionResult {
+  parentPageId?: string;
+  parentPageTitle?: string;
+  parentResolutionSource?: ParentResolutionSource;
+}
+
 function readConfiguredParentPageId(envVarName: RoutedParentPageConfig['envVarName']): string | undefined {
   const rawValue = process.env[envVarName]?.trim();
 
@@ -63,7 +70,7 @@ export class ConfluenceParentPageResolver {
   private async resolveConfiguredParentPage(
     config: RoutedParentPageConfig,
     targetSpaceId: string
-  ): Promise<string | undefined> {
+  ): Promise<ParentPageResolutionResult | undefined> {
     const configuredParentPageId = readConfiguredParentPageId(config.envVarName);
 
     if (!configuredParentPageId) {
@@ -86,7 +93,11 @@ export class ConfluenceParentPageResolver {
         return undefined;
       }
 
-      return configuredParentPage.id;
+      return {
+        parentPageId: configuredParentPage.id,
+        parentPageTitle: configuredParentPage.title,
+        parentResolutionSource: 'env',
+      };
     } catch (error) {
       console.warn('[DocumentationSync] Configured parent page could not be resolved. Falling back to title lookup.', {
         envVarName: config.envVarName,
@@ -103,7 +114,7 @@ export class ConfluenceParentPageResolver {
   private async resolveParentPageByExactTitle(
     config: RoutedParentPageConfig,
     targetSpaceId: string
-  ): Promise<string | undefined> {
+  ): Promise<ParentPageResolutionResult | undefined> {
     /**
      * We intentionally gather all exact-title matches instead of stopping at the first result.
      *
@@ -126,13 +137,23 @@ export class ConfluenceParentPageResolver {
       );
     }
 
-    return exactMatches[0]?.id;
+    const exactMatch = exactMatches[0];
+
+    if (!exactMatch) {
+      return undefined;
+    }
+
+    return {
+      parentPageId: exactMatch.id,
+      parentPageTitle: exactMatch.title,
+      parentResolutionSource: 'lookup',
+    };
   }
 
   private async createContainerPageAtSpaceRoot(
     config: RoutedParentPageConfig,
     targetSpaceId: string
-  ): Promise<string> {
+  ): Promise<ParentPageResolutionResult> {
     /**
      * Container pages are created at the space root on purpose.
      *
@@ -170,29 +191,33 @@ export class ConfluenceParentPageResolver {
       propertyKey: CONTAINER_PAGE_PROPERTY_KEY,
     });
 
-    return createdPage.id;
+    return {
+      parentPageId: createdPage.id,
+      parentPageTitle: createdPage.title,
+      parentResolutionSource: 'created',
+    };
   }
 
   async resolveParentPageId(
     pageType: DocumentationPageType,
     targetSpaceId: string
-  ): Promise<string | undefined> {
+  ): Promise<ParentPageResolutionResult> {
     const config = this.getParentPageConfig(pageType);
 
     if (!config) {
-      return undefined;
+      return {};
     }
 
-    const configuredParentPageId = await this.resolveConfiguredParentPage(config, targetSpaceId);
+    const configuredParentPage = await this.resolveConfiguredParentPage(config, targetSpaceId);
 
-    if (configuredParentPageId) {
-      return configuredParentPageId;
+    if (configuredParentPage) {
+      return configuredParentPage;
     }
 
-    const exactTitleParentPageId = await this.resolveParentPageByExactTitle(config, targetSpaceId);
+    const exactTitleParentPage = await this.resolveParentPageByExactTitle(config, targetSpaceId);
 
-    if (exactTitleParentPageId) {
-      return exactTitleParentPageId;
+    if (exactTitleParentPage) {
+      return exactTitleParentPage;
     }
 
     return this.createContainerPageAtSpaceRoot(config, targetSpaceId);
