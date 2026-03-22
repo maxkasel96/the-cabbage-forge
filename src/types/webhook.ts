@@ -58,6 +58,7 @@ export interface DocumentationStructuredDataPayload {
 export interface DocumentationWebhookPayload extends DocumentationRelationshipFields {
   source: string;
   eventType: string;
+  identifier?: string;
   feature?: string;
   system?: string;
   integration?: string;
