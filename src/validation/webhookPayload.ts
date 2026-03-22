@@ -1,7 +1,9 @@
 import { SUPPORTED_EVENT_TYPES, SUPPORTED_SOURCES } from '../config/constants';
 import { AppError } from '../errors/appError';
+import { buildRouteFromRoutingSource } from '../routing/documentationPageRouter';
 import type {
   DocumentationRelationshipFields,
+  DocumentationRoutingSource,
   DocumentationStructuredDataPayload,
   DocumentationWebhookPayload,
   SupportedEventType,
@@ -130,11 +132,11 @@ function validateStructuredDataPayload(
     return undefined;
   }
 
-const typedDetail: ValidatedDocumentationDetailPayload = validatedDetail;
+  const typedDetail: ValidatedDocumentationDetailPayload = validatedDetail;
 
-return {
-  detail: typedDetail,
-};
+  return {
+    detail: typedDetail,
+  };
 }
 
 function requireSupportedSource(value: string): SupportedSource {
@@ -160,15 +162,26 @@ function requireSupportedEventType(value: string): SupportedEventType {
 }
 
 function requireIsoTimestamp(value: string): string {
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString() !== value) {
+  /**
+   * We intentionally accept only UTC timestamps because downstream routing, page history rendering, and index updates
+   * all assume a single canonical time zone representation. Producers may now omit milliseconds for convenience, but
+   * the validator still normalizes the accepted value back to toISOString() so the rest of the app sees one shape.
+   */
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) {
     throw new AppError('BAD_REQUEST', 'timestamp must be a valid ISO-8601 UTC string.', 400, {
       receivedTimestamp: value,
     });
   }
 
-  return value;
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new AppError('BAD_REQUEST', 'timestamp must be a valid ISO-8601 UTC string.', 400, {
+      receivedTimestamp: value,
+    });
+  }
+
+  return parsedDate.toISOString();
 }
 
 function assertRoutingFieldsPresent(payload: ValidatedDocumentationWebhookPayload): void {
@@ -176,27 +189,158 @@ function assertRoutingFieldsPresent(payload: ValidatedDocumentationWebhookPayloa
     return;
   }
 
-  if (payload.eventType === 'release' || payload.eventType === 'incident') {
+  throw new AppError('BAD_REQUEST', 'Payload must include at least one routing identifier field.', 400, {
+    requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId', 'identifier'],
+    receivedEventType: payload.eventType,
+  });
+}
+
+function getRoutingSourceForEventType(eventType: SupportedEventType): DocumentationRoutingSource {
+  switch (eventType) {
+    case 'feature-update':
+      return 'feature';
+    case 'system-update':
+      return 'system';
+    case 'integration-update':
+      return 'integration';
+    case 'release':
+      return 'release';
+    case 'incident':
+      return 'incidentId';
+    default:
+      throw new AppError('BAD_REQUEST', 'eventType is not supported for identifier normalization.', 400, {
+        receivedEventType: eventType,
+      });
+  }
+}
+
+function normalizeIdentifierAgainstEventType(
+  eventType: SupportedEventType,
+  identifier: string | undefined
+): string | undefined {
+  if (!identifier) {
+    return undefined;
+  }
+
+  const routingSource = getRoutingSourceForEventType(eventType);
+
+  return buildRouteFromRoutingSource(routingSource, identifier).identifier;
+}
+
+function assertExplicitRoutingMatchesIdentifier(
+  eventType: SupportedEventType,
+  explicitRoutingValue: string | undefined,
+  identifier: string | undefined,
+  fieldName: DocumentationRoutingSource
+): void {
+  if (!explicitRoutingValue || !identifier) {
     return;
   }
 
-  throw new AppError('BAD_REQUEST', 'Payload must include at least one routing identifier field.', 400, {
-    requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId'],
-    receivedEventType: payload.eventType,
-  });
+  const normalizedExplicitValue = normalizeIdentifierAgainstEventType(eventType, explicitRoutingValue);
+  const normalizedIdentifierValue = normalizeIdentifierAgainstEventType(eventType, identifier);
+
+  if (normalizedExplicitValue !== normalizedIdentifierValue) {
+    throw new AppError(
+      'BAD_REQUEST',
+      'identifier does not match the explicit routing field for this eventType.',
+      400,
+      {
+        eventType,
+        field: fieldName,
+        explicitRoutingValue,
+        identifier,
+      }
+    );
+  }
+}
+
+function normalizeRoutingFields(
+  eventType: SupportedEventType,
+  payload: DocumentationWebhookPayload
+): Pick<
+  ValidatedDocumentationWebhookPayload,
+  'feature' | 'system' | 'integration' | 'release' | 'incidentId'
+> {
+  const identifier = optionalNonEmptyString(payload.identifier, 'identifier');
+  const feature = optionalNonEmptyString(payload.feature, 'feature');
+  const system = optionalNonEmptyString(payload.system, 'system');
+  const integration = optionalNonEmptyString(payload.integration, 'integration');
+  const release = optionalNonEmptyString(payload.release, 'release');
+  const incidentId = optionalNonEmptyString(payload.incidentId, 'incidentId');
+  const routingSource = getRoutingSourceForEventType(eventType);
+
+  switch (routingSource) {
+    case 'feature':
+      assertExplicitRoutingMatchesIdentifier(eventType, feature, identifier, routingSource);
+      return {
+        feature: feature ?? identifier,
+        system,
+        integration,
+        release,
+        incidentId,
+      };
+    case 'system':
+      assertExplicitRoutingMatchesIdentifier(eventType, system, identifier, routingSource);
+      return {
+        feature,
+        system: system ?? identifier,
+        integration,
+        release,
+        incidentId,
+      };
+    case 'integration':
+      assertExplicitRoutingMatchesIdentifier(eventType, integration, identifier, routingSource);
+      return {
+        feature,
+        system,
+        integration: integration ?? identifier,
+        release,
+        incidentId,
+      };
+    case 'release':
+      assertExplicitRoutingMatchesIdentifier(eventType, release, identifier, routingSource);
+      return {
+        feature,
+        system,
+        integration,
+        release: release ?? identifier,
+        incidentId,
+      };
+    case 'incidentId':
+      assertExplicitRoutingMatchesIdentifier(eventType, incidentId, identifier, routingSource);
+      return {
+        feature,
+        system,
+        integration,
+        release,
+        incidentId: incidentId ?? identifier,
+      };
+    default:
+      return {
+        feature,
+        system,
+        integration,
+        release,
+        incidentId,
+      };
+  }
 }
 
 export function validateDocumentationWebhookPayload(
   payload: DocumentationWebhookPayload
 ): ValidatedDocumentationWebhookPayload {
+  const eventType = requireSupportedEventType(requireNonEmptyString(payload.eventType, 'eventType'));
+  const normalizedRoutingFields = normalizeRoutingFields(eventType, payload);
+
   const validatedPayload: ValidatedDocumentationWebhookPayload = {
     source: requireSupportedSource(requireNonEmptyString(payload.source, 'source')),
-    eventType: requireSupportedEventType(requireNonEmptyString(payload.eventType, 'eventType')),
-    feature: optionalNonEmptyString(payload.feature, 'feature'),
-    system: optionalNonEmptyString(payload.system, 'system'),
-    integration: optionalNonEmptyString(payload.integration, 'integration'),
-    release: optionalNonEmptyString(payload.release, 'release'),
-    incidentId: optionalNonEmptyString(payload.incidentId, 'incidentId'),
+    eventType,
+    feature: normalizedRoutingFields.feature,
+    system: normalizedRoutingFields.system,
+    integration: normalizedRoutingFields.integration,
+    release: normalizedRoutingFields.release,
+    incidentId: normalizedRoutingFields.incidentId,
     relatedFeatures: optionalNonEmptyStringArray(payload.relatedFeatures, 'relatedFeatures'),
     relatedSystems: optionalNonEmptyStringArray(payload.relatedSystems, 'relatedSystems'),
     relatedIntegrations: optionalNonEmptyStringArray(payload.relatedIntegrations, 'relatedIntegrations'),
