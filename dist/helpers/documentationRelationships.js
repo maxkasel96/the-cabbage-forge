@@ -48,16 +48,30 @@ function buildRelatedPageReferenceCandidate(pageType, rawIdentifier, normalizeId
         }),
     };
 }
+function buildRelatedCandidateDedupeKey(candidate) {
+    return candidate.pageTitle.trim().toLocaleLowerCase();
+}
+function readRelationshipIdentifiers(payload, fieldName) {
+    /**
+     * data.detail is now the canonical structured location for relationship arrays, but we keep the legacy top-level
+     * fields alive so existing webhook senders do not break while they migrate.
+     *
+     * We intentionally merge both sources instead of choosing one winner because payload producers may roll forward in
+     * stages and briefly send the same relationship list in both places.
+     */
+    return [...(payload[fieldName] ?? []), ...(payload.data?.detail?.[fieldName] ?? [])];
+}
 function dedupeRelatedPageReferenceCandidates(candidates) {
     /**
      * Related documentation must stay payload-driven, so the first deduplication pass happens before any Confluence read.
      *
-     * We key by the exact page title that the seeded page-generation flow already uses. That keeps duplicate prevention
-     * deterministic even when multiple payload arrays accidentally mention the same target more than once.
+     * We key by the normalized destination title using case-insensitive comparison. That keeps duplicate prevention
+     * deterministic even when both the legacy top-level arrays and the new data.detail arrays mention the same page with
+     * slightly different casing.
      */
     const uniqueCandidates = new Map();
     for (const candidate of candidates) {
-        uniqueCandidates.set(candidate.pageTitle, candidate);
+        uniqueCandidates.set(buildRelatedCandidateDedupeKey(candidate), candidate);
     }
     return [...uniqueCandidates.values()];
 }
@@ -70,13 +84,14 @@ function extractRelatedPageReferencesFromPayload(payload, primaryRoute) {
      * page type via the field that carried it.
      */
     const extractedCandidates = RELATED_PAYLOAD_FIELD_CONFIGS.flatMap((config) => {
-        const relatedIdentifiers = payload[config.fieldName] ?? [];
+        const relatedIdentifiers = readRelationshipIdentifiers(payload, config.fieldName);
         return relatedIdentifiers.flatMap((relatedIdentifier) => {
             const candidate = buildRelatedPageReferenceCandidate(config.pageType, relatedIdentifier, config.normalizeIdentifier);
             if (!candidate) {
                 return [];
             }
-            const isPrimaryPage = candidate.pageType === primaryRoute.pageType && candidate.pageTitle === primaryRoute.pageTitle;
+            const isPrimaryPage = candidate.pageType === primaryRoute.pageType &&
+                buildRelatedCandidateDedupeKey(candidate) === buildRelatedCandidateDedupeKey(primaryRoute);
             return isPrimaryPage ? [] : [candidate];
         });
     });
@@ -113,7 +128,7 @@ async function resolveRelatedPages(pageService, spaceId, relatedPageReferences) 
         if (!resolvedPage) {
             continue;
         }
-        const dedupeKey = resolvedPage.pageId || resolvedPage.pageTitle;
+        const dedupeKey = (resolvedPage.pageId || resolvedPage.pageTitle).trim().toLocaleLowerCase();
         uniqueResolvedPages.set(dedupeKey, resolvedPage);
     }
     return [...uniqueResolvedPages.values()].sort((left, right) => left.pageTitle.localeCompare(right.pageTitle));

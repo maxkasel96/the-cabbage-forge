@@ -1,11 +1,23 @@
 import { SUPPORTED_EVENT_TYPES, SUPPORTED_SOURCES } from '../config/constants';
 import { AppError } from '../errors/appError';
 import type {
+  DocumentationDetailPayload,
+  DocumentationRelationshipFields,
   DocumentationWebhookPayload,
   SupportedEventType,
   SupportedSource,
+  ValidatedDocumentationDetailPayload,
+  ValidatedDocumentationStructuredDataPayload,
   ValidatedDocumentationWebhookPayload,
 } from '../types/webhook';
+
+const RELATED_PAYLOAD_FIELD_NAMES: (keyof DocumentationRelationshipFields)[] = [
+  'relatedFeatures',
+  'relatedSystems',
+  'relatedIntegrations',
+  'relatedReleases',
+  'relatedIncidents',
+];
 
 /**
  * The validation layer is intentionally explicit instead of clever.
@@ -26,7 +38,7 @@ function requireNonEmptyString(value: unknown, fieldName: keyof DocumentationWeb
 
 function optionalNonEmptyString(
   value: unknown,
-  fieldName: keyof DocumentationWebhookPayload
+  fieldName: keyof DocumentationWebhookPayload | keyof DocumentationDetailPayload | string
 ): string | undefined {
   if (typeof value === 'undefined') {
     return undefined;
@@ -43,7 +55,7 @@ function optionalNonEmptyString(
 
 function optionalNonEmptyStringArray(
   value: unknown,
-  fieldName: keyof DocumentationWebhookPayload
+  fieldName: keyof DocumentationWebhookPayload | keyof DocumentationRelationshipFields | keyof DocumentationDetailPayload | string
 ): string[] | undefined {
   if (typeof value === 'undefined') {
     return undefined;
@@ -67,6 +79,101 @@ function optionalNonEmptyStringArray(
   });
 
   return normalizedItems.length > 0 ? normalizedItems : undefined;
+}
+
+function optionalDocumentationPageType(value: unknown): ValidatedDocumentationStructuredDataPayload['pageType'] {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (
+    value !== 'feature-page' &&
+    value !== 'system-page' &&
+    value !== 'integration-page' &&
+    value !== 'release-page' &&
+    value !== 'incident-page'
+  ) {
+    throw new AppError('BAD_REQUEST', 'data.pageType must be a supported documentation page type when provided.', 400, {
+      field: 'data.pageType',
+      receivedPageType: value,
+    });
+  }
+
+  return value;
+}
+
+function validateRelationshipFields(
+  value: unknown,
+  fieldPrefix: string
+): DocumentationRelationshipFields | undefined {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AppError('BAD_REQUEST', `${fieldPrefix} must be an object when provided.`, 400, {
+      field: fieldPrefix,
+    });
+  }
+
+  const objectValue = value as Partial<Record<keyof DocumentationRelationshipFields, unknown>>;
+  const validatedFields: DocumentationRelationshipFields = {};
+
+  for (const fieldName of RELATED_PAYLOAD_FIELD_NAMES) {
+    const validatedArray = optionalNonEmptyStringArray(objectValue[fieldName], fieldName);
+
+    if (validatedArray) {
+      validatedFields[fieldName] = validatedArray;
+    }
+  }
+
+  return Object.keys(validatedFields).length > 0 ? validatedFields : undefined;
+}
+
+function validateDetailPayload(value: unknown): ValidatedDocumentationDetailPayload | undefined {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AppError('BAD_REQUEST', 'data.detail must be an object when provided.', 400, {
+      field: 'data.detail',
+    });
+  }
+
+  const detail = value as DocumentationDetailPayload;
+  const validatedDetail: ValidatedDocumentationDetailPayload = {
+    ...validateRelationshipFields(detail, 'data.detail'),
+    summary: optionalNonEmptyString(detail.summary, 'summary'),
+    currentState: optionalNonEmptyString(detail.currentState, 'currentState'),
+    keyNotes: optionalNonEmptyStringArray(detail.keyNotes, 'keyNotes'),
+  };
+
+  return Object.values(validatedDetail).some((fieldValue) => typeof fieldValue !== 'undefined')
+    ? validatedDetail
+    : undefined;
+}
+
+function validateStructuredDataPayload(
+  value: unknown
+): ValidatedDocumentationStructuredDataPayload | undefined {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AppError('BAD_REQUEST', 'data must be an object when provided.', 400, {
+      field: 'data',
+    });
+  }
+
+  const data = value as DocumentationWebhookPayload['data'];
+  const validatedData: ValidatedDocumentationStructuredDataPayload = {
+    pageType: optionalDocumentationPageType(data?.pageType),
+    detail: validateDetailPayload(data?.detail),
+  };
+
+  return validatedData.pageType || validatedData.detail ? validatedData : undefined;
 }
 
 function requireSupportedSource(value: string): SupportedSource {
@@ -134,6 +241,7 @@ export function validateDocumentationWebhookPayload(
     relatedIntegrations: optionalNonEmptyStringArray(payload.relatedIntegrations, 'relatedIntegrations'),
     relatedReleases: optionalNonEmptyStringArray(payload.relatedReleases, 'relatedReleases'),
     relatedIncidents: optionalNonEmptyStringArray(payload.relatedIncidents, 'relatedIncidents'),
+    data: validateStructuredDataPayload(payload.data),
     summary: requireNonEmptyString(payload.summary, 'summary'),
     message: requireNonEmptyString(payload.message, 'message'),
     timestamp: requireIsoTimestamp(requireNonEmptyString(payload.timestamp, 'timestamp')),
