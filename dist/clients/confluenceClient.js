@@ -74,15 +74,26 @@ class ConfluenceClient {
         });
         return parseJsonResponse(response, 'get page');
     }
-    async findPageByTitleInSpace(title, spaceId) {
-        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages?space-id=${spaceId}&title=${title}&body-format=storage&limit=1`, {
+    async findPagesByTitleInSpace(title, spaceId) {
+        /**
+         * Confluence's title search endpoint is the narrowest server-side filter available here, but we still apply our own
+         * exact-title filter before the data leaves this client.
+         *
+         * That extra guard lets the calling service detect duplicate exact matches deterministically instead of relying on
+         * implicit API ordering.
+         */
+        const response = await api_1.default.asApp().requestConfluence((0, api_1.route) `/wiki/api/v2/pages?space-id=${spaceId}&title=${title}&body-format=storage&limit=25`, {
             method: 'GET',
             headers: {
                 Accept: 'application/json',
             },
         });
-        const parsedResponse = await parseJsonResponse(response, 'find page by title');
-        return parsedResponse.results[0];
+        const parsedResponse = await parseJsonResponse(response, 'find pages by title');
+        return parsedResponse.results.filter((page) => page.title === title);
+    }
+    async findPageByTitleInSpace(title, spaceId) {
+        const exactMatches = await this.findPagesByTitleInSpace(title, spaceId);
+        return exactMatches[0];
     }
     async getPageProperty(pageId, propertyKey) {
         /**

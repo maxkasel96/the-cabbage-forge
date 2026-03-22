@@ -17,7 +17,7 @@ class ConfluencePageService {
          */
         console.info('[DocumentationSync] Resolved Confluence page target', details);
     }
-    async createPageForTitle(pageTitle, fallbackPage) {
+    async createPageForTitle(pageTitle, fallbackPage, parentPageId) {
         /**
          * We use the configured page as a hierarchy anchor instead of a content fallback.
          *
@@ -29,7 +29,11 @@ class ConfluencePageService {
             spaceId: fallbackPage.spaceId,
             status: 'current',
             title: pageTitle,
-            ...(fallbackPage.parentId ? { parentId: fallbackPage.parentId } : {}),
+            ...(parentPageId
+                ? { parentId: parentPageId }
+                : fallbackPage.parentId
+                    ? { parentId: fallbackPage.parentId }
+                    : {}),
             body: {
                 representation: 'storage',
                 value: '',
@@ -37,7 +41,7 @@ class ConfluencePageService {
         });
         return this.confluenceClient.getPage(createdPage.id);
     }
-    async ensurePageExists(fallbackPageId, pageTitle) {
+    async ensurePageExists(fallbackPageId, pageTitle, options) {
         const fallbackPage = await this.confluenceClient.getPage(fallbackPageId);
         const existingPage = await this.confluenceClient.findPageByTitleInSpace(pageTitle, fallbackPage.spaceId);
         if (existingPage) {
@@ -55,7 +59,7 @@ class ConfluencePageService {
                 createdPage: false,
             };
         }
-        const createdPage = await this.createPageForTitle(pageTitle, fallbackPage);
+        const createdPage = await this.createPageForTitle(pageTitle, fallbackPage, options?.parentPageId);
         this.logResolvedPageTarget({
             routedPageTitle: pageTitle,
             pageFound: false,
@@ -70,19 +74,22 @@ class ConfluencePageService {
             createdPage: true,
         };
     }
-    async resolvePageTarget(fallbackPageId, routedPageTitle) {
-        const resolvedPage = await this.ensurePageExists(fallbackPageId, routedPageTitle);
+    async resolvePageTarget(fallbackPageId, routedPageTitle, options) {
+        const resolvedPage = await this.ensurePageExists(fallbackPageId, routedPageTitle, options);
         return {
             page: resolvedPage.page,
             usedFallbackPage: false,
             createdPage: resolvedPage.createdPage,
         };
     }
-    async ensureRoutePageExists(fallbackPageId, route) {
-        return this.ensurePageExists(fallbackPageId, route.pageTitle);
+    async ensureRoutePageExists(fallbackPageId, route, options) {
+        return this.ensurePageExists(fallbackPageId, route.pageTitle, options);
     }
     async findPageByTitleInSpace(pageTitle, spaceId) {
         return this.confluenceClient.findPageByTitleInSpace(pageTitle, spaceId);
+    }
+    async getPage(pageId) {
+        return this.confluenceClient.getPage(pageId);
     }
     async loadIndexEntries(indexPage) {
         /**
