@@ -8,10 +8,13 @@ const documentationIndexing_1 = require("../helpers/documentationIndexing");
 const documentationRelationships_1 = require("../helpers/documentationRelationships");
 const documentationPageRouter_1 = require("../routing/documentationPageRouter");
 const confluencePageService_1 = require("./confluencePageService");
+const confluenceParentPageResolver_1 = require("./confluenceParentPageResolver");
 class DocumentationSyncService {
     confluencePageService;
+    confluenceParentPageResolver;
     constructor(confluenceClient) {
         this.confluencePageService = new confluencePageService_1.ConfluencePageService(confluenceClient);
+        this.confluenceParentPageResolver = new confluenceParentPageResolver_1.ConfluenceParentPageResolver(confluenceClient);
     }
     async syncDocumentation(payload) {
         /**
@@ -20,10 +23,14 @@ class DocumentationSyncService {
          * and then return a stable response contract for the caller.
          */
         const route = (0, documentationPageRouter_1.resolveRoute)(payload);
+        const anchorPage = await this.confluencePageService.getPage(constants_1.CONFLUENCE_TARGET_PAGE_ID);
+        const parentPageId = await this.confluenceParentPageResolver.resolveParentPageId(route.pageType, anchorPage.spaceId);
         const indexPageTitle = (0, documentationIndexing_1.getIndexPageTitle)(route.pageType);
         const relatedIndexPageType = (0, documentationIndexing_1.getRelatedIndexPageType)(route.pageType);
         const relatedPageReferences = (0, documentationRelationships_1.extractRelatedPageReferencesFromPayload)(payload, route);
-        const resolvedTarget = await this.confluencePageService.resolvePageTarget(constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageTitle);
+        const resolvedTarget = await this.confluencePageService.resolvePageTarget(constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageTitle, {
+            parentPageId,
+        });
         const ensuredIndexPage = await (0, documentationIndexing_1.ensureIndexPageExists)(this.confluencePageService, constants_1.CONFLUENCE_TARGET_PAGE_ID, route.pageType);
         const relatedPages = await (0, documentationRelationships_1.resolveRelatedPages)(this.confluencePageService, resolvedTarget.page.spaceId, relatedPageReferences);
         const existingContent = resolvedTarget.page.body?.storage?.value ?? '';

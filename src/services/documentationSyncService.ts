@@ -25,12 +25,16 @@ import {
 import { resolveRoute } from '../routing/documentationPageRouter';
 import type { DocumentationSyncResult, ValidatedDocumentationWebhookPayload } from '../types/webhook';
 import { ConfluencePageService } from './confluencePageService';
+import { ConfluenceParentPageResolver } from './confluenceParentPageResolver';
 
 export class DocumentationSyncService {
   private readonly confluencePageService: ConfluencePageService;
 
+  private readonly confluenceParentPageResolver: ConfluenceParentPageResolver;
+
   constructor(confluenceClient: ConfluenceClient) {
     this.confluencePageService = new ConfluencePageService(confluenceClient);
+    this.confluenceParentPageResolver = new ConfluenceParentPageResolver(confluenceClient);
   }
 
   async syncDocumentation(
@@ -42,13 +46,21 @@ export class DocumentationSyncService {
      * and then return a stable response contract for the caller.
      */
     const route = resolveRoute(payload);
+    const anchorPage = await this.confluencePageService.getPage(CONFLUENCE_TARGET_PAGE_ID);
+    const parentPageId = await this.confluenceParentPageResolver.resolveParentPageId(
+      route.pageType,
+      anchorPage.spaceId
+    );
     const indexPageTitle = getIndexPageTitle(route.pageType);
     const relatedIndexPageType = getRelatedIndexPageType(route.pageType);
     const relatedPageReferences = extractRelatedPageReferencesFromPayload(payload, route);
 
     const resolvedTarget = await this.confluencePageService.resolvePageTarget(
       CONFLUENCE_TARGET_PAGE_ID,
-      route.pageTitle
+      route.pageTitle,
+      {
+        parentPageId,
+      }
     );
     const ensuredIndexPage = await ensureIndexPageExists(
       this.confluencePageService,
