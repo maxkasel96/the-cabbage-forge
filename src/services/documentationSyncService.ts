@@ -1,8 +1,5 @@
 import { renderIndexPage } from '../builders/confluenceIndexBuilder';
-import {
-  mergeExistingContentWithNewUpdate,
-  renderDocumentationPage,
-} from '../builders/confluenceEntryBuilder';
+import { renderDocumentationPage } from '../builders/confluenceEntryBuilder';
 import {
   CONFLUENCE_TARGET_PAGE_ID,
   CONFLUENCE_TARGET_SPACE_KEY,
@@ -11,14 +8,12 @@ import {
 import type { ConfluenceClient } from '../clients/confluenceClient';
 import {
   buildIndexEntry,
-  buildNavigationSection,
   ensureIndexPageExists,
   getIndexPageTitle,
   getRelatedIndexPageType,
   updateIndexPage,
 } from '../helpers/documentationIndexing';
 import {
-  buildRelatedDocumentationSection,
   extractRelatedPageReferencesFromPayload,
   resolveRelatedPages,
 } from '../helpers/documentationRelationships';
@@ -72,26 +67,16 @@ export class DocumentationSyncService {
       resolvedTarget.page.spaceId,
       relatedPageReferences
     );
-    const existingContent = resolvedTarget.page.body?.storage?.value ?? '';
-    const mergeResult = mergeExistingContentWithNewUpdate(existingContent, payload);
-    const navigationSection = buildNavigationSection(route, ensuredIndexPage.page);
-    const relatedDocumentationSection = buildRelatedDocumentationSection(relatedPages);
-    const renderedPage = renderDocumentationPage(
-      payload,
-      route,
-      mergeResult.historyEntries,
-      navigationSection,
-      relatedDocumentationSection
-    );
+    const renderedPage = renderDocumentationPage(payload, route);
     const updateResult = await this.confluencePageService.updatePageBody(
       resolvedTarget.page.id,
       resolvedTarget.page.spaceId,
-      renderedPage,
+      renderedPage.body,
       {
-        pageInitialized: mergeResult.pageInitialized,
-        structuredContentUpdated: mergeResult.structuredContentUpdated,
-        historyEntryCount: mergeResult.historyEntries.length,
-        usedLegacyMigrationEntry: mergeResult.usedLegacyMigrationEntry,
+        pageInitialized: resolvedTarget.createdPage,
+        structuredContentUpdated: !resolvedTarget.createdPage,
+        historyEntryCount: 0,
+        usedLegacyMigrationEntry: false,
       }
     );
 

@@ -130,11 +130,32 @@ class ConfluencePageService {
     }
     async updatePageBody(pageId, expectedSpaceId, updatedBody, options) {
         const currentPage = await this.confluenceClient.getPage(pageId);
+        const currentBody = currentPage.body?.storage?.value?.trim() ?? '';
+        const nextBody = updatedBody.trim();
         if (expectedSpaceId && currentPage.spaceId !== expectedSpaceId) {
             throw new appError_1.AppError('BAD_REQUEST', 'Configured Confluence page does not belong to the expected space.', 400, {
                 expectedSpaceId,
                 receivedSpaceId: currentPage.spaceId,
             });
+        }
+        if (currentBody === nextBody) {
+            console.info('[DocumentationSync] Structured Confluence page update skipped because body was unchanged', {
+                pageId: currentPage.id,
+                title: currentPage.title,
+            });
+            return {
+                previousPage: currentPage,
+                updatedPage: {
+                    id: currentPage.id,
+                    title: currentPage.title,
+                    spaceId: currentPage.spaceId,
+                    version: currentPage.version,
+                },
+                pageInitialized: options.pageInitialized,
+                structuredContentUpdated: false,
+                historyEntryCount: options.historyEntryCount,
+                usedLegacyMigrationEntry: options.usedLegacyMigrationEntry,
+            };
         }
         const updateRequest = {
             id: currentPage.id,
@@ -146,7 +167,7 @@ class ConfluencePageService {
             },
             body: {
                 representation: 'storage',
-                value: updatedBody,
+                value: nextBody,
             },
         };
         // TODO: Add retry-safe version conflict handling if concurrent sync requests begin colliding on page version numbers.
