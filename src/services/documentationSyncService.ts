@@ -47,7 +47,7 @@ export class DocumentationSyncService {
      */
     const route = resolveRoute(payload);
     const anchorPage = await this.confluencePageService.getPage(CONFLUENCE_TARGET_PAGE_ID);
-    const parentPageId = await this.confluenceParentPageResolver.resolveParentPageId(
+    const parentPageResolution = await this.confluenceParentPageResolver.resolveParentPageId(
       route.pageType,
       anchorPage.spaceId
     );
@@ -59,7 +59,7 @@ export class DocumentationSyncService {
       CONFLUENCE_TARGET_PAGE_ID,
       route.pageTitle,
       {
-        parentPageId,
+        parentPageId: parentPageResolution.parentPageId,
       }
     );
     const ensuredIndexPage = await ensureIndexPageExists(
@@ -149,6 +149,13 @@ export class DocumentationSyncService {
       }
     }
 
+    console.info('[DocumentationSync] Parent page resolved', {
+      pageType: route.pageType,
+      parentPageId: parentPageResolution.parentPageId,
+      parentPageTitle: parentPageResolution.parentPageTitle,
+      parentResolutionSource: parentPageResolution.parentResolutionSource,
+    });
+
     console.info('[DocumentationSync] Documentation route resolved', {
       pageType: route.pageType,
       pageTitle: route.pageTitle,
@@ -180,6 +187,9 @@ export class DocumentationSyncService {
       route,
       usedFallbackPage: resolvedTarget.usedFallbackPage,
       createdPage: resolvedTarget.createdPage,
+      parentPageId: parentPageResolution.parentPageId,
+      parentPageTitle: parentPageResolution.parentPageTitle,
+      parentResolutionSource: parentPageResolution.parentResolutionSource,
       indexPageTitle,
       relatedIndexPageType,
       indexUpdated,

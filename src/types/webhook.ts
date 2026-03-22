@@ -26,6 +26,8 @@ export type DocumentationRoutingSource =
   | 'incidentId'
   | 'timestamp';
 
+export type ParentResolutionSource = 'env' | 'lookup' | 'created';
+
 export interface DocumentationRelationshipFields {
   relatedFeatures?: string[];
   relatedSystems?: string[];
@@ -165,6 +167,9 @@ export interface DocumentationSyncResult {
   route: DocumentationPageRoute;
   usedFallbackPage: boolean;
   createdPage: boolean;
+  parentPageId?: string;
+  parentPageTitle?: string;
+  parentResolutionSource?: ParentResolutionSource;
   indexPageTitle: string;
   relatedIndexPageType: DocumentationIndexPageType;
   indexUpdated: boolean;
