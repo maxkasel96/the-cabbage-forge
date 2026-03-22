@@ -1,11 +1,23 @@
 import { SUPPORTED_EVENT_TYPES, SUPPORTED_SOURCES } from '../config/constants';
 import { AppError } from '../errors/appError';
 import type {
+  DocumentationRelationshipFields,
+  DocumentationStructuredDataPayload,
   DocumentationWebhookPayload,
   SupportedEventType,
   SupportedSource,
+  ValidatedDocumentationDetailPayload,
+  ValidatedDocumentationStructuredDataPayload,
   ValidatedDocumentationWebhookPayload,
 } from '../types/webhook';
+
+const RELATED_PAYLOAD_FIELD_NAMES: (keyof DocumentationRelationshipFields)[] = [
+  'relatedFeatures',
+  'relatedSystems',
+  'relatedIntegrations',
+  'relatedReleases',
+  'relatedIncidents',
+];
 
 /**
  * The validation layer is intentionally explicit instead of clever.
@@ -24,10 +36,7 @@ function requireNonEmptyString(value: unknown, fieldName: keyof DocumentationWeb
   return value.trim();
 }
 
-function optionalNonEmptyString(
-  value: unknown,
-  fieldName: keyof DocumentationWebhookPayload
-): string | undefined {
+function optionalNonEmptyString(value: unknown, fieldName: string): string | undefined {
   if (typeof value === 'undefined') {
     return undefined;
   }
@@ -41,10 +50,7 @@ function optionalNonEmptyString(
   return value.trim();
 }
 
-function optionalNonEmptyStringArray(
-  value: unknown,
-  fieldName: keyof DocumentationWebhookPayload
-): string[] | undefined {
+function optionalNonEmptyStringArray(value: unknown, fieldName: string): string[] | undefined {
   if (typeof value === 'undefined') {
     return undefined;
   }
@@ -67,6 +73,66 @@ function optionalNonEmptyStringArray(
   });
 
   return normalizedItems.length > 0 ? normalizedItems : undefined;
+}
+
+function validateRelationshipFields(
+  relationshipSource: Partial<Record<keyof DocumentationRelationshipFields, unknown>>
+): DocumentationRelationshipFields | undefined {
+  const validatedFields: DocumentationRelationshipFields = {};
+
+  for (const fieldName of RELATED_PAYLOAD_FIELD_NAMES) {
+    const validatedArray = optionalNonEmptyStringArray(relationshipSource[fieldName], fieldName);
+
+    if (validatedArray) {
+      validatedFields[fieldName] = validatedArray;
+    }
+  }
+
+  return Object.keys(validatedFields).length > 0 ? validatedFields : undefined;
+}
+
+function validateStructuredDataPayload(
+  value: unknown
+): ValidatedDocumentationStructuredDataPayload | undefined {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new AppError('BAD_REQUEST', 'data must be an object when provided.', 400, {
+      field: 'data',
+    });
+  }
+
+  const data = value as DocumentationStructuredDataPayload;
+
+  /**
+   * We only need the structured relationship arrays for this contract refinement.
+   *
+   * Other data/detail fields are intentionally left alone so we do not accidentally tighten unrelated parts of the
+   * webhook contract while adding backward-compatible support for data.detail.related* arrays.
+   */
+  if (typeof data.detail === 'undefined') {
+    return undefined;
+  }
+
+  if (!data.detail || typeof data.detail !== 'object' || Array.isArray(data.detail)) {
+    throw new AppError('BAD_REQUEST', 'data.detail must be an object when provided.', 400, {
+      field: 'data.detail',
+    });
+  }
+
+  const validatedDetail = validateRelationshipFields(
+    data.detail as Partial<Record<keyof DocumentationRelationshipFields, unknown>>
+  );
+
+  if (!validatedDetail) {
+    return undefined;
+  }
+
+  return {
+    detail: validatedDetail satisfies ValidatedDocumentationDetailPayload,
+  };
 }
 
 function requireSupportedSource(value: string): SupportedSource {
@@ -134,6 +200,7 @@ export function validateDocumentationWebhookPayload(
     relatedIntegrations: optionalNonEmptyStringArray(payload.relatedIntegrations, 'relatedIntegrations'),
     relatedReleases: optionalNonEmptyStringArray(payload.relatedReleases, 'relatedReleases'),
     relatedIncidents: optionalNonEmptyStringArray(payload.relatedIncidents, 'relatedIncidents'),
+    data: validateStructuredDataPayload(payload.data),
     summary: requireNonEmptyString(payload.summary, 'summary'),
     message: requireNonEmptyString(payload.message, 'message'),
     timestamp: requireIsoTimestamp(requireNonEmptyString(payload.timestamp, 'timestamp')),

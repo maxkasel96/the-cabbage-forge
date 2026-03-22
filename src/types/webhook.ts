@@ -26,7 +26,36 @@ export type DocumentationRoutingSource =
   | 'incidentId'
   | 'timestamp';
 
-export interface DocumentationWebhookPayload {
+export interface DocumentationRelationshipFields {
+  relatedFeatures?: string[];
+  relatedSystems?: string[];
+  relatedIntegrations?: string[];
+  relatedReleases?: string[];
+  relatedIncidents?: string[];
+}
+
+export interface DocumentationDetailPayload extends DocumentationRelationshipFields {
+  /**
+   * The upstream Next.js producer already uses data.detail for structured page content.
+   *
+   * Forge only needs the relationship arrays from that envelope for this change, but keeping the established content
+   * fields here makes the forward-looking contract clearer for both sides of the integration.
+   */
+  summary?: string;
+  currentState?: string;
+  keyNotes?: string[];
+}
+
+export interface DocumentationStructuredDataPayload {
+  /**
+   * pageType is descriptive metadata supplied by the caller. Routing remains driven by the existing explicit routing
+   * fields and event-type precedence rules rather than by this value.
+   */
+  pageType?: DocumentationPageType;
+  detail?: DocumentationDetailPayload;
+}
+
+export interface DocumentationWebhookPayload extends DocumentationRelationshipFields {
   source: string;
   eventType: string;
   feature?: string;
@@ -34,17 +63,25 @@ export interface DocumentationWebhookPayload {
   integration?: string;
   release?: string;
   incidentId?: string;
-  relatedFeatures?: string[];
-  relatedSystems?: string[];
-  relatedIntegrations?: string[];
-  relatedReleases?: string[];
-  relatedIncidents?: string[];
+  /**
+   * data.detail is the canonical structured location for relationship arrays going forward.
+   *
+   * The legacy top-level related* arrays remain supported so existing webhook payloads keep working while producers
+   * migrate toward the structured contract.
+   */
+  data?: DocumentationStructuredDataPayload;
   summary: string;
   message: string;
   timestamp: string;
 }
 
-export interface ValidatedDocumentationWebhookPayload {
+export interface ValidatedDocumentationDetailPayload extends DocumentationRelationshipFields {}
+
+export interface ValidatedDocumentationStructuredDataPayload {
+  detail?: ValidatedDocumentationDetailPayload;
+}
+
+export interface ValidatedDocumentationWebhookPayload extends DocumentationRelationshipFields {
   source: SupportedSource;
   eventType: SupportedEventType;
   feature?: string;
@@ -52,11 +89,7 @@ export interface ValidatedDocumentationWebhookPayload {
   integration?: string;
   release?: string;
   incidentId?: string;
-  relatedFeatures?: string[];
-  relatedSystems?: string[];
-  relatedIntegrations?: string[];
-  relatedReleases?: string[];
-  relatedIncidents?: string[];
+  data?: ValidatedDocumentationStructuredDataPayload;
   summary: string;
   message: string;
   timestamp: string;
