@@ -23,6 +23,12 @@ const ROUTED_PARENT_PAGE_CONFIG_BY_TYPE = {
         containerTitle: 'Systems',
         envVarName: 'CONFLUENCE_PARENT_SYSTEMS_ID',
     },
+    'runbook-page': {
+        containerKey: 'runbooks',
+        pageType: 'runbook-page',
+        containerTitle: 'Runbooks',
+        envVarName: 'CONFLUENCE_PARENT_RUNBOOKS_ID',
+    },
 };
 function readConfiguredParentPageId(envVarName) {
     const rawValue = process.env[envVarName]?.trim();

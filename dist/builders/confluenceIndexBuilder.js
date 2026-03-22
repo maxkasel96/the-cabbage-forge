@@ -19,6 +19,8 @@ function getIndexOverview(indexPageType) {
             return 'This index keeps the current system documentation pages in one predictable place for quick navigation.';
         case 'integrations-index':
             return 'This index keeps the current integration documentation pages in one predictable place for quick navigation.';
+        case 'runbooks-index':
+            return 'This index keeps the current runbook documentation pages in one predictable place for quick navigation.';
         case 'releases-index':
             return 'This index keeps the current release documentation pages in one predictable place for quick navigation.';
         case 'incidents-index':

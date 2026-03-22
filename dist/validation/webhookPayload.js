@@ -138,11 +138,11 @@ function requireIsoTimestamp(value) {
     return parsedDate.toISOString();
 }
 function assertRoutingFieldsPresent(payload) {
-    if (payload.feature || payload.system || payload.integration || payload.release || payload.incidentId) {
+    if (payload.feature || payload.system || payload.integration || payload.runbook || payload.release || payload.incidentId) {
         return;
     }
     throw new appError_1.AppError('BAD_REQUEST', 'Payload must include at least one routing identifier field.', 400, {
-        requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId', 'identifier'],
+        requiredRoutingFields: ['feature', 'system', 'integration', 'runbook', 'release', 'incidentId', 'identifier'],
         receivedEventType: payload.eventType,
     });
 }
@@ -154,6 +154,8 @@ function getRoutingSourceForEventType(eventType) {
             return 'system';
         case 'integration-update':
             return 'integration';
+        case 'runbook-update':
+            return 'runbook';
         case 'release':
             return 'release';
         case 'incident':
@@ -191,6 +193,7 @@ function normalizeRoutingFields(eventType, payload) {
     const feature = optionalNonEmptyString(payload.feature, 'feature');
     const system = optionalNonEmptyString(payload.system, 'system');
     const integration = optionalNonEmptyString(payload.integration, 'integration');
+    const runbook = optionalNonEmptyString(payload.runbook, 'runbook');
     const release = optionalNonEmptyString(payload.release, 'release');
     const incidentId = optionalNonEmptyString(payload.incidentId, 'incidentId');
     const routingSource = getRoutingSourceForEventType(eventType);
@@ -219,6 +222,17 @@ function normalizeRoutingFields(eventType, payload) {
                 feature,
                 system,
                 integration: integration ?? identifier,
+                runbook,
+                release,
+                incidentId,
+            };
+        case 'runbook':
+            assertExplicitRoutingMatchesIdentifier(eventType, runbook, identifier, routingSource);
+            return {
+                feature,
+                system,
+                integration,
+                runbook: runbook ?? identifier,
                 release,
                 incidentId,
             };
@@ -228,6 +242,7 @@ function normalizeRoutingFields(eventType, payload) {
                 feature,
                 system,
                 integration,
+                runbook,
                 release: release ?? identifier,
                 incidentId,
             };
@@ -237,6 +252,7 @@ function normalizeRoutingFields(eventType, payload) {
                 feature,
                 system,
                 integration,
+                runbook,
                 release,
                 incidentId: incidentId ?? identifier,
             };
@@ -245,6 +261,7 @@ function normalizeRoutingFields(eventType, payload) {
                 feature,
                 system,
                 integration,
+                runbook,
                 release,
                 incidentId,
             };
@@ -259,6 +276,7 @@ function validateDocumentationWebhookPayload(payload) {
         feature: normalizedRoutingFields.feature,
         system: normalizedRoutingFields.system,
         integration: normalizedRoutingFields.integration,
+        runbook: normalizedRoutingFields.runbook,
         release: normalizedRoutingFields.release,
         incidentId: normalizedRoutingFields.incidentId,
         relatedFeatures: optionalNonEmptyStringArray(payload.relatedFeatures, 'relatedFeatures'),

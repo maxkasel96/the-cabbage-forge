@@ -16,6 +16,8 @@ function getIndexPrefix(indexPageType) {
             return 'Systems Index';
         case 'integrations-index':
             return 'Integrations Index';
+        case 'runbooks-index':
+            return 'Runbooks Index';
         case 'releases-index':
             return 'Releases Index';
         case 'incidents-index':
@@ -32,6 +34,8 @@ function getRelatedIndexPageType(pageType) {
             return 'systems-index';
         case 'integration-page':
             return 'integrations-index';
+        case 'runbook-page':
+            return 'runbooks-index';
         case 'release-page':
             return 'releases-index';
         case 'incident-page':

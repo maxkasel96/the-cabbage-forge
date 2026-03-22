@@ -53,6 +53,12 @@ function buildRouteFromRoutingSource(routingSource, rawIdentifier) {
                 identifier: normalizeReadableIdentifier(rawIdentifier),
                 routingSource,
             });
+        case 'runbook':
+            return buildRouteFromCandidate({
+                pageType: 'runbook-page',
+                identifier: normalizeReadableIdentifier(rawIdentifier),
+                routingSource,
+            });
         case 'release':
             return buildRouteFromCandidate({
                 pageType: 'release-page',
@@ -85,6 +91,8 @@ function toRoutePrefix(pageType) {
             return 'System';
         case 'integration-page':
             return 'Integration';
+        case 'runbook-page':
+            return 'Runbook';
         case 'release-page':
             return 'Release';
         case 'incident-page':
@@ -142,6 +150,13 @@ function resolveRoute(payload) {
             routingSource: 'integration',
         });
     }
+    if (payload.eventType === 'runbook-update' && payload.runbook) {
+        return buildRouteFromCandidate({
+            pageType: 'runbook-page',
+            identifier: normalizeReadableIdentifier(payload.runbook),
+            routingSource: 'runbook',
+        });
+    }
     if (payload.eventType === 'system-update' && payload.system) {
         return buildRouteFromCandidate({
             pageType: 'system-page',
@@ -170,6 +185,13 @@ function resolveRoute(payload) {
             routingSource: 'integration',
         });
     }
+    if (payload.runbook) {
+        return buildRouteFromCandidate({
+            pageType: 'runbook-page',
+            identifier: normalizeReadableIdentifier(payload.runbook),
+            routingSource: 'runbook',
+        });
+    }
     if (payload.system) {
         return buildRouteFromCandidate({
             pageType: 'system-page',
@@ -185,7 +207,7 @@ function resolveRoute(payload) {
         });
     }
     throw new appError_1.AppError('BAD_REQUEST', 'Payload did not include enough routing context to resolve a documentation page.', 400, {
-        requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId'],
+        requiredRoutingFields: ['feature', 'system', 'integration', 'runbook', 'release', 'incidentId'],
         receivedEventType: payload.eventType,
     });
 }

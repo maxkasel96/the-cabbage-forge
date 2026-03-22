@@ -16,6 +16,7 @@ export const SUPPORTED_EVENT_TYPES = [
   'feature-update',
   'system-update',
   'integration-update',
+  'runbook-update',
   'release',
   'incident',
 ] as const;

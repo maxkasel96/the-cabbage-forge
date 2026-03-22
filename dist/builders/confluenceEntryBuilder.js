@@ -24,6 +24,7 @@ function renderMetadataBlock(payload, route) {
         renderOptionalMetadataRow('Feature', payload.feature),
         renderOptionalMetadataRow('System', payload.system),
         renderOptionalMetadataRow('Integration', payload.integration),
+        renderOptionalMetadataRow('Runbook', payload.runbook),
         renderOptionalMetadataRow('Release', payload.release),
         renderOptionalMetadataRow('Incident ID', payload.incidentId),
     ]
