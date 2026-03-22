@@ -3,6 +3,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateDocumentationWebhookPayload = validateDocumentationWebhookPayload;
 const constants_1 = require("../config/constants");
 const appError_1 = require("../errors/appError");
+const RELATED_PAYLOAD_FIELD_NAMES = [
+    'relatedFeatures',
+    'relatedSystems',
+    'relatedIntegrations',
+    'relatedReleases',
+    'relatedIncidents',
+];
 /**
  * The validation layer is intentionally explicit instead of clever.
  *
@@ -48,6 +55,48 @@ function optionalNonEmptyStringArray(value, fieldName) {
         return item.trim();
     });
     return normalizedItems.length > 0 ? normalizedItems : undefined;
+}
+function validateRelationshipFields(relationshipSource) {
+    const validatedFields = {};
+    for (const fieldName of RELATED_PAYLOAD_FIELD_NAMES) {
+        const validatedArray = optionalNonEmptyStringArray(relationshipSource[fieldName], fieldName);
+        if (validatedArray) {
+            validatedFields[fieldName] = validatedArray;
+        }
+    }
+    return Object.keys(validatedFields).length > 0 ? validatedFields : undefined;
+}
+function validateStructuredDataPayload(value) {
+    if (typeof value === 'undefined') {
+        return undefined;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new appError_1.AppError('BAD_REQUEST', 'data must be an object when provided.', 400, {
+            field: 'data',
+        });
+    }
+    const data = value;
+    /**
+     * We only need the structured relationship arrays for this contract refinement.
+     *
+     * Other data/detail fields are intentionally left alone so we do not accidentally tighten unrelated parts of the
+     * webhook contract while adding backward-compatible support for data.detail.related* arrays.
+     */
+    if (typeof data.detail === 'undefined') {
+        return undefined;
+    }
+    if (!data.detail || typeof data.detail !== 'object' || Array.isArray(data.detail)) {
+        throw new appError_1.AppError('BAD_REQUEST', 'data.detail must be an object when provided.', 400, {
+            field: 'data.detail',
+        });
+    }
+    const validatedDetail = validateRelationshipFields(data.detail);
+    if (!validatedDetail) {
+        return undefined;
+    }
+    return {
+        detail: validatedDetail,
+    };
 }
 function requireSupportedSource(value) {
     if (!constants_1.SUPPORTED_SOURCES.includes(value)) {
@@ -102,6 +151,7 @@ function validateDocumentationWebhookPayload(payload) {
         relatedIntegrations: optionalNonEmptyStringArray(payload.relatedIntegrations, 'relatedIntegrations'),
         relatedReleases: optionalNonEmptyStringArray(payload.relatedReleases, 'relatedReleases'),
         relatedIncidents: optionalNonEmptyStringArray(payload.relatedIncidents, 'relatedIncidents'),
+        data: validateStructuredDataPayload(payload.data),
         summary: requireNonEmptyString(payload.summary, 'summary'),
         message: requireNonEmptyString(payload.message, 'message'),
         timestamp: requireIsoTimestamp(requireNonEmptyString(payload.timestamp, 'timestamp')),
