@@ -135,6 +135,7 @@ const typedDetail: ValidatedDocumentationDetailPayload = validatedDetail;
 return {
   detail: typedDetail,
 };
+}
 
 function requireSupportedSource(value: string): SupportedSource {
   if (!SUPPORTED_SOURCES.includes(value as SupportedSource)) {
