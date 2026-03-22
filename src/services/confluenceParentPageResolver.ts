@@ -9,10 +9,14 @@ declare const process: { env: Record<string, string | undefined> };
 const CONTAINER_PAGE_PROPERTY_KEY = 'docsync.container';
 
 interface RoutedParentPageConfig {
-  containerKey: 'features' | 'integrations' | 'systems';
-  pageType: 'feature-page' | 'integration-page' | 'system-page';
+  containerKey: 'features' | 'integrations' | 'systems' | 'runbooks';
+  pageType: 'feature-page' | 'integration-page' | 'system-page' | 'runbook-page';
   containerTitle: string;
-  envVarName: 'CONFLUENCE_PARENT_FEATURES_ID' | 'CONFLUENCE_PARENT_INTEGRATIONS_ID' | 'CONFLUENCE_PARENT_SYSTEMS_ID';
+  envVarName:
+    | 'CONFLUENCE_PARENT_FEATURES_ID'
+    | 'CONFLUENCE_PARENT_INTEGRATIONS_ID'
+    | 'CONFLUENCE_PARENT_SYSTEMS_ID'
+    | 'CONFLUENCE_PARENT_RUNBOOKS_ID';
 }
 
 interface ContainerPagePropertyValue {
@@ -40,6 +44,12 @@ const ROUTED_PARENT_PAGE_CONFIG_BY_TYPE: Partial<Record<DocumentationPageType, R
     pageType: 'system-page',
     containerTitle: 'Systems',
     envVarName: 'CONFLUENCE_PARENT_SYSTEMS_ID',
+  },
+  'runbook-page': {
+    containerKey: 'runbooks',
+    pageType: 'runbook-page',
+    containerTitle: 'Runbooks',
+    envVarName: 'CONFLUENCE_PARENT_RUNBOOKS_ID',
   },
 };
 

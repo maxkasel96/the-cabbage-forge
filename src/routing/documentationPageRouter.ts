@@ -66,6 +66,12 @@ export function buildRouteFromRoutingSource(
         identifier: normalizeReadableIdentifier(rawIdentifier),
         routingSource,
       });
+    case 'runbook':
+      return buildRouteFromCandidate({
+        pageType: 'runbook-page',
+        identifier: normalizeReadableIdentifier(rawIdentifier),
+        routingSource,
+      });
     case 'release':
       return buildRouteFromCandidate({
         pageType: 'release-page',
@@ -99,6 +105,8 @@ function toRoutePrefix(pageType: DocumentationPageType): string {
       return 'System';
     case 'integration-page':
       return 'Integration';
+    case 'runbook-page':
+      return 'Runbook';
     case 'release-page':
       return 'Release';
     case 'incident-page':
@@ -166,6 +174,14 @@ export function resolveRoute(
     });
   }
 
+  if (payload.eventType === 'runbook-update' && payload.runbook) {
+    return buildRouteFromCandidate({
+      pageType: 'runbook-page',
+      identifier: normalizeReadableIdentifier(payload.runbook),
+      routingSource: 'runbook',
+    });
+  }
+
   if (payload.eventType === 'system-update' && payload.system) {
     return buildRouteFromCandidate({
       pageType: 'system-page',
@@ -198,6 +214,14 @@ export function resolveRoute(
     });
   }
 
+  if (payload.runbook) {
+    return buildRouteFromCandidate({
+      pageType: 'runbook-page',
+      identifier: normalizeReadableIdentifier(payload.runbook),
+      routingSource: 'runbook',
+    });
+  }
+
   if (payload.system) {
     return buildRouteFromCandidate({
       pageType: 'system-page',
@@ -215,7 +239,7 @@ export function resolveRoute(
   }
 
   throw new AppError('BAD_REQUEST', 'Payload did not include enough routing context to resolve a documentation page.', 400, {
-    requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId'],
+    requiredRoutingFields: ['feature', 'system', 'integration', 'runbook', 'release', 'incidentId'],
     receivedEventType: payload.eventType,
   });
 }

@@ -185,12 +185,12 @@ function requireIsoTimestamp(value: string): string {
 }
 
 function assertRoutingFieldsPresent(payload: ValidatedDocumentationWebhookPayload): void {
-  if (payload.feature || payload.system || payload.integration || payload.release || payload.incidentId) {
+  if (payload.feature || payload.system || payload.integration || payload.runbook || payload.release || payload.incidentId) {
     return;
   }
 
   throw new AppError('BAD_REQUEST', 'Payload must include at least one routing identifier field.', 400, {
-    requiredRoutingFields: ['feature', 'system', 'integration', 'release', 'incidentId', 'identifier'],
+    requiredRoutingFields: ['feature', 'system', 'integration', 'runbook', 'release', 'incidentId', 'identifier'],
     receivedEventType: payload.eventType,
   });
 }
@@ -203,6 +203,8 @@ function getRoutingSourceForEventType(eventType: SupportedEventType): Documentat
       return 'system';
     case 'integration-update':
       return 'integration';
+    case 'runbook-update':
+      return 'runbook';
     case 'release':
       return 'release';
     case 'incident':
@@ -260,12 +262,13 @@ function normalizeRoutingFields(
   payload: DocumentationWebhookPayload
 ): Pick<
   ValidatedDocumentationWebhookPayload,
-  'feature' | 'system' | 'integration' | 'release' | 'incidentId'
+  'feature' | 'system' | 'integration' | 'runbook' | 'release' | 'incidentId'
 > {
   const identifier = optionalNonEmptyString(payload.identifier, 'identifier');
   const feature = optionalNonEmptyString(payload.feature, 'feature');
   const system = optionalNonEmptyString(payload.system, 'system');
   const integration = optionalNonEmptyString(payload.integration, 'integration');
+  const runbook = optionalNonEmptyString(payload.runbook, 'runbook');
   const release = optionalNonEmptyString(payload.release, 'release');
   const incidentId = optionalNonEmptyString(payload.incidentId, 'incidentId');
   const routingSource = getRoutingSourceForEventType(eventType);
@@ -295,6 +298,17 @@ function normalizeRoutingFields(
         feature,
         system,
         integration: integration ?? identifier,
+        runbook,
+        release,
+        incidentId,
+      };
+    case 'runbook':
+      assertExplicitRoutingMatchesIdentifier(eventType, runbook, identifier, routingSource);
+      return {
+        feature,
+        system,
+        integration,
+        runbook: runbook ?? identifier,
         release,
         incidentId,
       };
@@ -304,6 +318,7 @@ function normalizeRoutingFields(
         feature,
         system,
         integration,
+        runbook,
         release: release ?? identifier,
         incidentId,
       };
@@ -313,6 +328,7 @@ function normalizeRoutingFields(
         feature,
         system,
         integration,
+        runbook,
         release,
         incidentId: incidentId ?? identifier,
       };
@@ -321,6 +337,7 @@ function normalizeRoutingFields(
         feature,
         system,
         integration,
+        runbook,
         release,
         incidentId,
       };
@@ -339,6 +356,7 @@ export function validateDocumentationWebhookPayload(
     feature: normalizedRoutingFields.feature,
     system: normalizedRoutingFields.system,
     integration: normalizedRoutingFields.integration,
+    runbook: normalizedRoutingFields.runbook,
     release: normalizedRoutingFields.release,
     incidentId: normalizedRoutingFields.incidentId,
     relatedFeatures: optionalNonEmptyStringArray(payload.relatedFeatures, 'relatedFeatures'),

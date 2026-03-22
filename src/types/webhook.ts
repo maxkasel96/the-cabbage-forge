@@ -8,6 +8,7 @@ export type DocumentationPageType =
   | 'feature-page'
   | 'system-page'
   | 'integration-page'
+  | 'runbook-page'
   | 'release-page'
   | 'incident-page';
 
@@ -15,6 +16,7 @@ export type DocumentationIndexPageType =
   | 'features-index'
   | 'systems-index'
   | 'integrations-index'
+  | 'runbooks-index'
   | 'releases-index'
   | 'incidents-index';
 
@@ -22,6 +24,7 @@ export type DocumentationRoutingSource =
   | 'feature'
   | 'system'
   | 'integration'
+  | 'runbook'
   | 'release'
   | 'incidentId'
   | 'timestamp';
@@ -64,6 +67,7 @@ export interface DocumentationWebhookPayload extends DocumentationRelationshipFi
   feature?: string;
   system?: string;
   integration?: string;
+  runbook?: string;
   release?: string;
   incidentId?: string;
   /**
@@ -90,6 +94,7 @@ export interface ValidatedDocumentationWebhookPayload extends DocumentationRelat
   feature?: string;
   system?: string;
   integration?: string;
+  runbook?: string;
   release?: string;
   incidentId?: string;
   data?: ValidatedDocumentationStructuredDataPayload;
