@@ -4,14 +4,20 @@ import type { ConfluencePageService } from '../services/confluencePageService';
 import type {
   DocumentationPageRoute,
   DocumentationPageType,
-  DocumentationRelationshipFields,
   ResolvedRelatedPage,
   ValidatedDocumentationWebhookPayload,
 } from '../types/webhook';
 import { buildConfluencePageUrl } from './documentationIndexing';
 
 interface RelatedPayloadFieldConfig {
-  fieldName: keyof DocumentationRelationshipFields;
+  fieldName: keyof Pick<
+    ValidatedDocumentationWebhookPayload,
+    | 'relatedFeatures'
+    | 'relatedSystems'
+    | 'relatedIntegrations'
+    | 'relatedReleases'
+    | 'relatedIncidents'
+  >;
   pageType: DocumentationPageType;
   normalizeIdentifier: (value: string) => string;
 }
@@ -71,38 +77,19 @@ function buildRelatedPageReferenceCandidate(
   };
 }
 
-function buildRelatedCandidateDedupeKey(candidate: Pick<RelatedPageReferenceCandidate, 'pageTitle'>): string {
-  return candidate.pageTitle.trim().toLocaleLowerCase();
-}
-
-function readRelationshipIdentifiers(
-  payload: ValidatedDocumentationWebhookPayload,
-  fieldName: keyof DocumentationRelationshipFields
-): string[] {
-  /**
-   * data.detail is now the canonical structured location for relationship arrays, but we keep the legacy top-level
-   * fields alive so existing webhook senders do not break while they migrate.
-   *
-   * We intentionally merge both sources instead of choosing one winner because payload producers may roll forward in
-   * stages and briefly send the same relationship list in both places.
-   */
-  return [...(payload[fieldName] ?? []), ...(payload.data?.detail?.[fieldName] ?? [])];
-}
-
 export function dedupeRelatedPageReferenceCandidates(
   candidates: RelatedPageReferenceCandidate[]
 ): RelatedPageReferenceCandidate[] {
   /**
    * Related documentation must stay payload-driven, so the first deduplication pass happens before any Confluence read.
    *
-   * We key by the normalized destination title using case-insensitive comparison. That keeps duplicate prevention
-   * deterministic even when both the legacy top-level arrays and the new data.detail arrays mention the same page with
-   * slightly different casing.
+   * We key by the exact page title that the seeded page-generation flow already uses. That keeps duplicate prevention
+   * deterministic even when multiple payload arrays accidentally mention the same target more than once.
    */
   const uniqueCandidates = new Map<string, RelatedPageReferenceCandidate>();
 
   for (const candidate of candidates) {
-    uniqueCandidates.set(buildRelatedCandidateDedupeKey(candidate), candidate);
+    uniqueCandidates.set(candidate.pageTitle, candidate);
   }
 
   return [...uniqueCandidates.values()];
@@ -120,7 +107,7 @@ export function extractRelatedPageReferencesFromPayload(
    * page type via the field that carried it.
    */
   const extractedCandidates = RELATED_PAYLOAD_FIELD_CONFIGS.flatMap((config) => {
-    const relatedIdentifiers = readRelationshipIdentifiers(payload, config.fieldName);
+    const relatedIdentifiers = payload[config.fieldName] ?? [];
 
     return relatedIdentifiers.flatMap((relatedIdentifier) => {
       const candidate = buildRelatedPageReferenceCandidate(
@@ -134,8 +121,7 @@ export function extractRelatedPageReferencesFromPayload(
       }
 
       const isPrimaryPage =
-        candidate.pageType === primaryRoute.pageType &&
-        buildRelatedCandidateDedupeKey(candidate) === buildRelatedCandidateDedupeKey(primaryRoute);
+        candidate.pageType === primaryRoute.pageType && candidate.pageTitle === primaryRoute.pageTitle;
 
       return isPrimaryPage ? [] : [candidate];
     });
@@ -186,7 +172,7 @@ export async function resolveRelatedPages(
       continue;
     }
 
-    const dedupeKey = (resolvedPage.pageId || resolvedPage.pageTitle).trim().toLocaleLowerCase();
+    const dedupeKey = resolvedPage.pageId || resolvedPage.pageTitle;
 
     uniqueResolvedPages.set(dedupeKey, resolvedPage);
   }

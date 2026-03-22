@@ -26,36 +26,7 @@ export type DocumentationRoutingSource =
   | 'incidentId'
   | 'timestamp';
 
-export interface DocumentationRelationshipFields {
-  relatedFeatures?: string[];
-  relatedSystems?: string[];
-  relatedIntegrations?: string[];
-  relatedReleases?: string[];
-  relatedIncidents?: string[];
-}
-
-export interface DocumentationDetailPayload extends DocumentationRelationshipFields {
-  /**
-   * The Next.js producer already treats data.detail as the structured page-content envelope.
-   *
-   * Forge still renders from the validated top-level fields today, but we type the nested shape here so relationship
-   * arrays can move into the same structured contract without hiding that intent from future maintainers.
-   */
-  summary?: string;
-  currentState?: string;
-  keyNotes?: string[];
-}
-
-export interface DocumentationStructuredDataPayload {
-  /**
-   * pageType is descriptive metadata supplied by the caller. Routing continues to be resolved by the existing explicit
-   * identifier precedence rules rather than by trusting this field.
-   */
-  pageType?: DocumentationPageType;
-  detail?: DocumentationDetailPayload;
-}
-
-export interface DocumentationWebhookPayload extends DocumentationRelationshipFields {
+export interface DocumentationWebhookPayload {
   source: string;
   eventType: string;
   feature?: string;
@@ -63,29 +34,17 @@ export interface DocumentationWebhookPayload extends DocumentationRelationshipFi
   integration?: string;
   release?: string;
   incidentId?: string;
-  /**
-   * data.detail is the forward-looking canonical location for structured page content and relationship arrays.
-   *
-   * The legacy top-level relationship arrays remain supported for backward compatibility with existing webhook senders.
-   */
-  data?: DocumentationStructuredDataPayload;
+  relatedFeatures?: string[];
+  relatedSystems?: string[];
+  relatedIntegrations?: string[];
+  relatedReleases?: string[];
+  relatedIncidents?: string[];
   summary: string;
   message: string;
   timestamp: string;
 }
 
-export interface ValidatedDocumentationDetailPayload extends DocumentationRelationshipFields {
-  summary?: string;
-  currentState?: string;
-  keyNotes?: string[];
-}
-
-export interface ValidatedDocumentationStructuredDataPayload {
-  pageType?: DocumentationPageType;
-  detail?: ValidatedDocumentationDetailPayload;
-}
-
-export interface ValidatedDocumentationWebhookPayload extends DocumentationRelationshipFields {
+export interface ValidatedDocumentationWebhookPayload {
   source: SupportedSource;
   eventType: SupportedEventType;
   feature?: string;
@@ -93,7 +52,11 @@ export interface ValidatedDocumentationWebhookPayload extends DocumentationRelat
   integration?: string;
   release?: string;
   incidentId?: string;
-  data?: ValidatedDocumentationStructuredDataPayload;
+  relatedFeatures?: string[];
+  relatedSystems?: string[];
+  relatedIntegrations?: string[];
+  relatedReleases?: string[];
+  relatedIncidents?: string[];
   summary: string;
   message: string;
   timestamp: string;
